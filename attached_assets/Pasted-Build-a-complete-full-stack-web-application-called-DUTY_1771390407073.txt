@@ -1,0 +1,379 @@
+Build a complete full-stack web application called DUTYSWAP — an AI-based stress-aware task reallocation system.
+
+🧠 PROJECT OVERVIEW
+
+Create a professional full-stack web application named:
+
+DUTYSWAP – AI Health-Aware Task Reallocation System
+
+The system helps organizations manage employee stress and automatically reassign tasks when stress is high.
+
+It must be:
+
+Fully working
+
+Modern UI
+
+AI-based logic
+
+Admin + Employee panels
+
+SQLite database
+
+Flask backend
+
+Responsive design
+
+Production ready
+
+⚙️ TECH STACK (STRICT)
+
+Use:
+
+Backend:
+
+Python Flask
+
+SQLite database
+
+Frontend:
+
+HTML5
+
+CSS3 modern UI
+
+JavaScript
+
+Chart.js for graphs
+
+Design:
+
+Glassmorphism modern UI
+
+Soft gradient background
+
+Professional dashboard
+
+🧑‍💼 USER ROLES
+1. ADMIN
+2. EMPLOYEE
+
+Login system with role selection.
+
+🔐 LOGIN SYSTEM
+
+Create login page:
+
+Admin login:
+
+Username: admin
+
+Password: admin123
+
+Employee login:
+
+Select name from dropdown
+
+No password needed (demo)
+
+👨‍💻 EMPLOYEE FEATURES
+1. Employee Dashboard
+
+Show:
+
+Welcome name
+
+Role
+
+Current stress level
+
+Stress badge (Low/Medium/High)
+
+Stress graph
+
+Stress history table
+
+2. Submit Daily Stress
+
+Form with:
+
+Stress level (1–5 slider)
+
+Submit button
+
+Store in database:
+
+employee_id
+
+stress_value
+
+date
+
+🤖 AI IMPLEMENTATION (IMPORTANT)
+
+Implement simple AI rule-based engine.
+
+Stress Classification AI
+1–2 → Low stress
+3 → Medium stress
+4–5 → High stress
+
+
+If HIGH stress:
+Trigger AI duty reallocation.
+
+🧠 AI TASK REALLOCATION LOGIC
+
+When employee stress becomes HIGH:
+
+System should:
+
+Find all tasks assigned to that employee
+
+Find employees with LOW stress
+
+Reassign task automatically
+
+Save in duty_logs table
+
+Show message:
+"Your work has been reassigned due to high stress"
+
+If no low-stress employee:
+Show:
+"Contact Admin"
+
+📋 EMPLOYEE SHOULD SEE
+If work reassigned:
+
+Show alert box:
+
+⚠ Your work reassigned
+Assigned to: [employee name]
+Contact Admin button
+
+📥 WORK ASSIGNED TO YOU SECTION
+
+If employee receives reassigned work:
+
+Show table:
+
+From employee
+
+Date
+
+Button → Mark Completed
+
+When clicked:
+
+Update duty status = Completed
+
+Show success message
+
+🛠 ADMIN DASHBOARD
+
+Create powerful admin dashboard.
+
+Show cards:
+
+Total employees
+
+Low stress count
+
+Medium stress count
+
+High stress count
+
+Total tasks reassigned
+
+👥 ADMIN FEATURES
+Add Employee
+
+Form:
+
+Name
+
+Role
+
+Add button
+
+Add Task
+
+Form:
+
+Task title
+
+Assign employee
+
+Priority dropdown
+
+View All Employees
+
+Table:
+
+Name
+
+Role
+
+Stress
+
+Status
+
+View Duty Reallocation History
+
+Table:
+
+From employee
+
+To employee
+
+Date
+
+Status
+
+View Messages (Contact Admin)
+
+Employees can send message to admin.
+
+📊 CHARTS REQUIRED
+
+Use Chart.js
+
+Employee dashboard:
+
+Stress trend graph
+
+Admin dashboard:
+
+Stress distribution pie chart
+
+🗄 DATABASE TABLES
+
+Create SQLite tables:
+
+employees
+
+id
+name
+role
+stress
+
+stress_logs
+
+id
+employee_id
+stress
+date
+
+tasks
+
+id
+task
+assigned_to
+priority
+status
+
+duty_logs
+
+id
+from_employee
+to_employee
+date
+status
+
+messages
+
+id
+employee_name
+message
+date
+
+🎨 UI DESIGN
+
+Use modern professional UI:
+
+Gradient background
+
+Rounded cards
+
+Soft shadows
+
+Yellow + white theme
+
+Clean dashboard layout
+
+Mobile responsive
+
+🧠 SMART FEATURES
+
+Add:
+
+Auto refresh dashboard
+
+Notifications
+
+Success popups
+
+Animated buttons
+
+Proper navigation
+
+🔥 ADVANCED AI FEATURE (ADD)
+
+Create future AI module file:
+
+ai_engine.py
+
+Include:
+
+Stress prediction logic
+
+Future ML integration placeholder
+
+Add comment:
+"Future ML model can be added here"
+
+📁 PROJECT STRUCTURE
+
+Create complete structure:
+
+/templates
+   login.html
+   admin_dashboard.html
+   employee_dashboard.html
+   add_employee.html
+   add_task.html
+   history.html
+
+/static
+   style.css
+
+app.py
+database.py
+ai_engine.py
+
+▶️ RUN INSTRUCTIONS
+
+At end show:
+
+How to run:
+
+pip install flask
+python app.py
+
+
+Run on:
+localhost:5000
+
+🎯 FINAL OUTPUT EXPECTATION
+
+Generate:
+✔ Full working code
+✔ All HTML pages
+✔ CSS modern UI
+✔ AI logic
+✔ Database setup
+✔ No missing files
+✔ Ready to run
+
+Make it look like a real company product.
