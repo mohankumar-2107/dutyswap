@@ -18,7 +18,6 @@ export async function registerRoutes(
 
       if (role === 'admin') {
         if (username === 'admin' && password === 'admin123') {
-           // Find or create admin user in DB for consistency
            let admin = await storage.getEmployeeByUsername('admin');
            if (!admin) {
              admin = await storage.createEmployee({
@@ -33,7 +32,6 @@ export async function registerRoutes(
            return res.status(401).json({ message: 'Invalid admin credentials' });
         }
       } else {
-        // Employee login
         if (!employeeId) return res.status(400).json({ message: 'Employee ID required' });
         const employee = await storage.getEmployee(employeeId);
         if (!employee) return res.status(401).json({ message: 'Employee not found' });
@@ -46,6 +44,12 @@ export async function registerRoutes(
   
   app.post(api.auth.logout.path, (req, res) => {
       res.json({ message: 'Logged out' });
+  });
+
+  app.get(api.auth.me.path, async (req, res) => {
+      // In a real app, this would check session/token
+      // For this demo, we'll return null to prompt login if not handled by frontend state
+      res.json(null);
   });
 
   // === EMPLOYEES ===
@@ -100,45 +104,56 @@ export async function registerRoutes(
       res.json(updated);
   });
 
-  // === STRESS & AI LOGIC ===
+  // === STRESS & AI CHAT LOGIC ===
   app.post(api.stress.log.path, async (req, res) => {
     try {
       const input = api.stress.log.input.parse(req.body);
       
-      // 1. Log stress
-      const log = await storage.logStress(input);
-      
-      // 2. Update employee current stress
-      const employee = await storage.updateEmployeeStress(input.employeeId, input.stressLevel);
-      
-      // 3. AI Reallocation Logic
-      let reallocation = false;
-      let message = "Stress logged successfully.";
+      // Calculate stress level based on total score (0-40)
+      // 0-15 -> 1 (Low)
+      // 16-25 -> 3 (Medium)
+      // 26-40 -> 5 (High)
+      let calculatedLevel = 1;
+      const score = input.totalScore || 0;
+      if (score > 25) {
+        calculatedLevel = 5;
+      } else if (score > 15) {
+        calculatedLevel = 3;
+      }
 
-      if (input.stressLevel >= 4) {
-          // Trigger AI reallocation
+      // Log stress with the new data
+      const logData = {
+        ...input,
+        stressLevel: calculatedLevel,
+      };
+      
+      const log = await storage.logStress(logData);
+      
+      // Update employee current stress
+      const employee = await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
+      
+      // AI Reallocation Logic
+      let reallocation = false;
+      let message = "Wellness check-in completed. Your stress level is " + (calculatedLevel === 1 ? "Low" : calculatedLevel === 3 ? "Medium" : "High") + ".";
+
+      if (calculatedLevel === 5) {
+          // Trigger AI reallocation for High stress
           const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
           
           if (pendingTasks.length > 0) {
-              // Find candidates (Low stress <= 2)
               const candidates = await storage.getLowStressEmployees(input.employeeId);
               
               if (candidates.length > 0) {
-                  // Pick best candidate (random for now, or lowest stress)
-                  // Simple logic: Round robin or first one
                   const targetEmployee = candidates[0];
-                  
-                  // Reassign ONE task (or all? prompt says "Reassign task")
-                  // Let's reassign the highest priority task first
-                  const taskToMove = pendingTasks[0]; // Could sort by priority
+                  const taskToMove = pendingTasks[0];
                   
                   await storage.reassignTask(taskToMove.id, targetEmployee.id);
-                  await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `High Stress (${input.stressLevel}) detected`);
+                  await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `High Stress (Score: ${score}) detected via Wellness Chat`);
                   
                   reallocation = true;
-                  message = `High stress detected! Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name}.`;
+                  message = `High stress detected (Score: ${score}). Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name} to support your wellness.`;
               } else {
-                  message = "High stress detected, but no available low-stress employees found. Please contact Admin.";
+                  message = `High stress detected (Score: ${score}), but no available low-stress employees found. Please contact Admin.`;
               }
           }
       }
@@ -146,6 +161,7 @@ export async function registerRoutes(
       res.json({ log, reallocation, message });
 
     } catch (err) {
+      console.error(err);
       res.status(400).json({ message: 'Validation error' });
     }
   });
@@ -178,25 +194,21 @@ export async function registerRoutes(
       res.json(msgs);
   });
 
-  // Seed data function
   await seedDatabase();
 
   return httpServer;
 }
 
 async function seedDatabase() {
-    const employees = await storage.getEmployees();
-    if (employees.length === 0) {
+    const employeesList = await storage.getEmployees();
+    if (employeesList.length === 0) {
         console.log("Seeding database...");
-        // Create Admin
         await storage.createEmployee({ name: 'System Admin', role: 'admin', username: 'admin', password: 'admin123' });
         
-        // Create Employees
-        const emp1 = await storage.createEmployee({ name: 'Alice Johnson', role: 'employee', currentStress: 2 });
-        const emp2 = await storage.createEmployee({ name: 'Bob Smith', role: 'employee', currentStress: 5 });
+        const emp1 = await storage.createEmployee({ name: 'Alice Johnson', role: 'employee', currentStress: 1 });
+        const emp2 = await storage.createEmployee({ name: 'Bob Smith', role: 'employee', currentStress: 1 });
         const emp3 = await storage.createEmployee({ name: 'Charlie Brown', role: 'employee', currentStress: 1 });
         
-        // Create Tasks
         await storage.createTask({ title: 'Complete Q1 Report', assignedToId: emp1.id, priority: 'High', status: 'Pending' });
         await storage.createTask({ title: 'Update Website Assets', assignedToId: emp2.id, priority: 'Medium', status: 'Pending' });
         await storage.createTask({ title: 'Client Meeting Prep', assignedToId: emp2.id, priority: 'High', status: 'Pending' });

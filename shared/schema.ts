@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -10,10 +10,9 @@ export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   role: text("role").notNull(), // 'admin' | 'employee'
-  // Current stress level (cached for easy access, updated via triggers or logic)
   currentStress: integer("current_stress").default(0),
-  username: text("username").unique(), // For admin login or identifying employees
-  password: text("password"), // Only for admin in this demo
+  username: text("username").unique(),
+  password: text("password"),
 });
 
 export const tasks = pgTable("tasks", {
@@ -28,9 +27,11 @@ export const tasks = pgTable("tasks", {
 export const stressLogs = pgTable("stress_logs", {
   id: serial("id").primaryKey(),
   employeeId: integer("employee_id").notNull().references(() => employees.id),
-  stressLevel: integer("stress_level").notNull(), // 1-5
+  stressLevel: integer("stress_level").notNull(), // 1-5 (legacy) or calculated from chat
+  totalScore: integer("total_score"), // New: sum of 10 questions
+  answers: jsonb("answers"), // New: store individual answers
   loggedAt: timestamp("logged_at").defaultNow(),
-  date: date("date").defaultNow(), // For easy daily querying
+  date: date("date").defaultNow(),
 });
 
 export const dutyLogs = pgTable("duty_logs", {
