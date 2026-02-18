@@ -47,8 +47,6 @@ export async function registerRoutes(
   });
 
   app.get(api.auth.me.path, async (req, res) => {
-      // In a real app, this would check session/token
-      // For this demo, we'll return null to prompt login if not handled by frontend state
       res.json(null);
   });
 
@@ -121,7 +119,6 @@ export async function registerRoutes(
         calculatedLevel = 3;
       }
 
-      // Log stress with the new data
       const logData = {
         ...input,
         stressLevel: calculatedLevel,
@@ -130,14 +127,13 @@ export async function registerRoutes(
       const log = await storage.logStress(logData);
       
       // Update employee current stress
-      const employee = await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
+      await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
       
       // AI Reallocation Logic
       let reallocation = false;
       let message = "Wellness check-in completed. Your stress level is " + (calculatedLevel === 1 ? "Low" : calculatedLevel === 3 ? "Medium" : "High") + ".";
 
       if (calculatedLevel === 5) {
-          // Trigger AI reallocation for High stress
           const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
           
           if (pendingTasks.length > 0) {
