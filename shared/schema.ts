@@ -1,18 +1,124 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+
+import { pgTable, text, serial, integer, boolean, timestamp, date } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+// === TABLE DEFINITIONS ===
+
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  role: text("role").notNull(), // 'admin' | 'employee'
+  // Current stress level (cached for easy access, updated via triggers or logic)
+  currentStress: integer("current_stress").default(0),
+  username: text("username").unique(), // For admin login or identifying employees
+  password: text("password"), // Only for admin in this demo
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  assignedToId: integer("assigned_to_id").references(() => employees.id),
+  priority: text("priority").notNull(), // 'Low', 'Medium', 'High'
+  status: text("status").notNull().default("Pending"), // 'Pending', 'Completed'
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export const stressLogs = pgTable("stress_logs", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id),
+  stressLevel: integer("stress_level").notNull(), // 1-5
+  loggedAt: timestamp("logged_at").defaultNow(),
+  date: date("date").defaultNow(), // For easy daily querying
+});
+
+export const dutyLogs = pgTable("duty_logs", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").references(() => tasks.id),
+  fromEmployeeId: integer("from_employee_id").references(() => employees.id),
+  toEmployeeId: integer("to_employee_id").references(() => employees.id),
+  reallocationDate: timestamp("reallocation_date").defaultNow(),
+  reason: text("reason").default("High Stress Auto-Reallocation"),
+});
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id),
+  content: text("content").notNull(),
+  sentAt: timestamp("sent_at").defaultNow(),
+  isRead: boolean("is_read").default(false),
+});
+
+// === RELATIONS ===
+
+export const employeesRelations = relations(employees, ({ many }) => ({
+  tasks: many(tasks),
+  stressLogs: many(stressLogs),
+  messages: many(messages),
+  reallocationsFrom: many(dutyLogs, { relationName: "reallocatedFrom" }),
+  reallocationsTo: many(dutyLogs, { relationName: "reallocatedTo" }),
+}));
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  assignee: one(employees, {
+    fields: [tasks.assignedToId],
+    references: [employees.id],
+  }),
+  dutyLogs: many(dutyLogs),
+}));
+
+export const stressLogsRelations = relations(stressLogs, ({ one }) => ({
+  employee: one(employees, {
+    fields: [stressLogs.employeeId],
+    references: [employees.id],
+  }),
+}));
+
+export const dutyLogsRelations = relations(dutyLogs, ({ one }) => ({
+  task: one(tasks, {
+    fields: [dutyLogs.taskId],
+    references: [tasks.id],
+  }),
+  fromEmployee: one(employees, {
+    fields: [dutyLogs.fromEmployeeId],
+    references: [employees.id],
+    relationName: "reallocatedFrom"
+  }),
+  toEmployee: one(employees, {
+    fields: [dutyLogs.toEmployeeId],
+    references: [employees.id],
+    relationName: "reallocatedTo"
+  }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  employee: one(employees, {
+    fields: [messages.employeeId],
+    references: [employees.id],
+  }),
+}));
+
+// === ZOD SCHEMAS ===
+
+export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true, currentStress: true });
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, status: true });
+export const insertStressLogSchema = createInsertSchema(stressLogs).omit({ id: true, loggedAt: true, date: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, sentAt: true, isRead: true });
+
+// === TYPES ===
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+
+export type StressLog = typeof stressLogs.$inferSelect;
+export type InsertStressLog = z.infer<typeof insertStressLogSchema>;
+
+export type DutyLog = typeof dutyLogs.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+
+// For API responses
+export type EmployeeWithLogs = Employee & { stressLogs: StressLog[] };

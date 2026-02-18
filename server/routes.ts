@@ -1,16 +1,207 @@
+
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import { storage } from "./storage";
+import { api, errorSchemas } from "@shared/routes";
+import { z } from "zod";
+import { employees, tasks } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // === AUTH ===
+  app.post(api.auth.login.path, async (req, res) => {
+    try {
+      const { role, username, password, employeeId } = api.auth.login.input.parse(req.body);
+
+      if (role === 'admin') {
+        if (username === 'admin' && password === 'admin123') {
+           // Find or create admin user in DB for consistency
+           let admin = await storage.getEmployeeByUsername('admin');
+           if (!admin) {
+             admin = await storage.createEmployee({
+               name: 'System Admin',
+               role: 'admin',
+               username: 'admin',
+               password: 'admin123'
+             });
+           }
+           return res.json(admin);
+        } else {
+           return res.status(401).json({ message: 'Invalid admin credentials' });
+        }
+      } else {
+        // Employee login
+        if (!employeeId) return res.status(400).json({ message: 'Employee ID required' });
+        const employee = await storage.getEmployee(employeeId);
+        if (!employee) return res.status(401).json({ message: 'Employee not found' });
+        return res.json(employee);
+      }
+    } catch (err) {
+       res.status(400).json({ message: 'Invalid request' });
+    }
+  });
+  
+  app.post(api.auth.logout.path, (req, res) => {
+      res.json({ message: 'Logged out' });
+  });
+
+  // === EMPLOYEES ===
+  app.get(api.employees.list.path, async (req, res) => {
+    const employees = await storage.getEmployees();
+    res.json(employees);
+  });
+
+  app.post(api.employees.create.path, async (req, res) => {
+    try {
+      const input = api.employees.create.input.parse(req.body);
+      const employee = await storage.createEmployee(input);
+      res.status(201).json(employee);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+  
+  app.get(api.employees.get.path, async (req, res) => {
+      const id = Number(req.params.id);
+      const employee = await storage.getEmployee(id);
+      if (!employee) return res.status(404).json({ message: 'Not found' });
+      
+      const logs = await storage.getStressLogs(id);
+      res.json({ ...employee, stressLogs: logs });
+  });
+
+  // === TASKS ===
+  app.get(api.tasks.list.path, async (req, res) => {
+    const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
+    const tasks = await storage.getTasks(employeeId);
+    res.json(tasks);
+  });
+
+  app.post(api.tasks.create.path, async (req, res) => {
+    try {
+      const input = api.tasks.create.input.parse(req.body);
+      const task = await storage.createTask(input);
+      res.status(201).json(task);
+    } catch (err) {
+      res.status(400).json({ message: 'Validation error' });
+    }
+  });
+
+  app.patch(api.tasks.complete.path, async (req, res) => {
+      const id = Number(req.params.id);
+      const updated = await storage.updateTaskStatus(id, 'Completed');
+      if (!updated) return res.status(404).json({ message: 'Task not found' });
+      res.json(updated);
+  });
+
+  // === STRESS & AI LOGIC ===
+  app.post(api.stress.log.path, async (req, res) => {
+    try {
+      const input = api.stress.log.input.parse(req.body);
+      
+      // 1. Log stress
+      const log = await storage.logStress(input);
+      
+      // 2. Update employee current stress
+      const employee = await storage.updateEmployeeStress(input.employeeId, input.stressLevel);
+      
+      // 3. AI Reallocation Logic
+      let reallocation = false;
+      let message = "Stress logged successfully.";
+
+      if (input.stressLevel >= 4) {
+          // Trigger AI reallocation
+          const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
+          
+          if (pendingTasks.length > 0) {
+              // Find candidates (Low stress <= 2)
+              const candidates = await storage.getLowStressEmployees(input.employeeId);
+              
+              if (candidates.length > 0) {
+                  // Pick best candidate (random for now, or lowest stress)
+                  // Simple logic: Round robin or first one
+                  const targetEmployee = candidates[0];
+                  
+                  // Reassign ONE task (or all? prompt says "Reassign task")
+                  // Let's reassign the highest priority task first
+                  const taskToMove = pendingTasks[0]; // Could sort by priority
+                  
+                  await storage.reassignTask(taskToMove.id, targetEmployee.id);
+                  await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `High Stress (${input.stressLevel}) detected`);
+                  
+                  reallocation = true;
+                  message = `High stress detected! Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name}.`;
+              } else {
+                  message = "High stress detected, but no available low-stress employees found. Please contact Admin.";
+              }
+          }
+      }
+
+      res.json({ log, reallocation, message });
+
+    } catch (err) {
+      res.status(400).json({ message: 'Validation error' });
+    }
+  });
+
+  app.get(api.stress.history.path, async (req, res) => {
+      const history = await storage.getStressLogs(Number(req.params.employeeId));
+      res.json(history);
+  });
+
+  // === ADMIN ===
+  app.get(api.admin.stats.path, async (req, res) => {
+    const stats = await storage.getAdminStats();
+    res.json(stats);
+  });
+
+  app.get(api.admin.dutyLogs.path, async (req, res) => {
+      const logs = await storage.getDutyLogs();
+      res.json(logs);
+  });
+
+  // === MESSAGES ===
+  app.post(api.messages.create.path, async (req, res) => {
+      const input = api.messages.create.input.parse(req.body);
+      const message = await storage.createMessage(input);
+      res.status(201).json(message);
+  });
+
+  app.get(api.messages.list.path, async (req, res) => {
+      const msgs = await storage.getMessages();
+      res.json(msgs);
+  });
+
+  // Seed data function
+  await seedDatabase();
 
   return httpServer;
+}
+
+async function seedDatabase() {
+    const employees = await storage.getEmployees();
+    if (employees.length === 0) {
+        console.log("Seeding database...");
+        // Create Admin
+        await storage.createEmployee({ name: 'System Admin', role: 'admin', username: 'admin', password: 'admin123' });
+        
+        // Create Employees
+        const emp1 = await storage.createEmployee({ name: 'Alice Johnson', role: 'employee', currentStress: 2 });
+        const emp2 = await storage.createEmployee({ name: 'Bob Smith', role: 'employee', currentStress: 5 });
+        const emp3 = await storage.createEmployee({ name: 'Charlie Brown', role: 'employee', currentStress: 1 });
+        
+        // Create Tasks
+        await storage.createTask({ title: 'Complete Q1 Report', assignedToId: emp1.id, priority: 'High', status: 'Pending' });
+        await storage.createTask({ title: 'Update Website Assets', assignedToId: emp2.id, priority: 'Medium', status: 'Pending' });
+        await storage.createTask({ title: 'Client Meeting Prep', assignedToId: emp2.id, priority: 'High', status: 'Pending' });
+        await storage.createTask({ title: 'Fix Login Bug', assignedToId: emp3.id, priority: 'Low', status: 'Pending' });
+
+        console.log("Seeding complete.");
+    }
 }
