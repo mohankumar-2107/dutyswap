@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Sparkles, RefreshCw, MessageSquare, User, Bot, Info, AlertTriangle } from "lucide-react";
+import { Brain, Sparkles, RefreshCw, MessageSquare, User, Bot, Info, AlertTriangle, Send } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";

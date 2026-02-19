@@ -41,7 +41,7 @@ export default function EmployeeDashboard() {
   if (!user) return null;
 
   const isBurnoutRisk = stressHistory && stressHistory.length >= 3 && 
-    stressHistory.slice(-3).every(log => log.stressLevel >= 4);
+    stressHistory.slice(-3).every((log: any) => log.stressLevel >= 4);
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-4 pb-12">
