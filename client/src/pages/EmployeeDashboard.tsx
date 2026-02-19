@@ -5,7 +5,7 @@ import { StressBadge } from "@/components/StressBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, LifeBuoy, Zap } from "lucide-react";
+import { CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, LifeBuoy, Zap, Brain } from "lucide-react";
 import { format } from "date-fns";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { AIWellnessChat } from "@/components/AIWellnessChat";
