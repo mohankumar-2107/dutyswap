@@ -178,14 +178,25 @@ export default function WellnessCheckin() {
                   </Button>
 
                   {currentStep === QUESTIONS.length - 1 ? (
-                    <Button
-                      onClick={handleSubmit}
-                      disabled={stressMutation.isPending}
-                      className="bg-green-500 hover:bg-green-600 text-white font-black h-12 px-8 rounded-xl shadow-lg shadow-green-100 flex items-center gap-2"
-                    >
-                      <ShieldCheck className="w-5 h-5" />
-                      Complete Assessment
-                    </Button>
+                    <div className="flex flex-col gap-4 w-full">
+                      <Button
+                        onClick={handleSubmit}
+                        disabled={stressMutation.isPending}
+                        className="bg-green-500 hover:bg-green-600 text-white font-black h-12 px-8 rounded-xl shadow-lg shadow-green-100 flex items-center gap-2 w-full"
+                      >
+                        <ShieldCheck className="w-5 h-5" />
+                        Complete Assessment
+                      </Button>
+                      <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                        <h4 className="text-xs font-black text-blue-900 uppercase mb-1">Algorithm & ML info</h4>
+                        <p className="text-[10px] text-blue-700 leading-tight">
+                          Uses a <strong>Rule-based Scoring Algorithm</strong>. Each response is weighted (1-4). 
+                          The <strong>Classification Logic</strong> maps the total score (10-40) to stress tiers: 
+                          Low (10-15), Medium (16-25), High (26-40). 
+                          Reallocation uses a <strong>Greedy Load-Balancing Algorithm</strong> to find employees with the lowest stress scores.
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <Button
                       disabled={answers[currentStep] === undefined}
