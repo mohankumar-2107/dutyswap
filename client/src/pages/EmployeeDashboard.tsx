@@ -13,6 +13,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+import { Link } from "wouter";
+
 export default function EmployeeDashboard() {
   const { data: user, refetch: refetchUser } = useUser();
   const { data: tasks, isLoading: tasksLoading } = useTasks(user?.id);
@@ -85,7 +87,11 @@ export default function EmployeeDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Col: Chat Interface */}
         <div className="lg:col-span-4 space-y-6">
-          <AIWellnessChat employeeId={user.id} />
+          <Link href="/wellness">
+            <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-8 py-6 rounded-2xl shadow-xl hover:scale-105 transition-transform font-bold text-lg">
+              Update Stress Status
+            </Button>
+          </Link>
           
           {isBurnoutRisk && (
             <motion.div

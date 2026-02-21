@@ -13,6 +13,8 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import ReallocationLogs from "@/pages/ReallocationLogs";
 import NotFound from "@/pages/not-found";
 
+import WellnessCheckin from "@/pages/WellnessCheckin";
+
 function ProtectedRoute({ component: Component, allowedRole }: { component: any, allowedRole?: 'admin' | 'employee' }) {
   const { data: user, isLoading } = useUser();
   const [, setLocation] = useLocation();
@@ -48,6 +50,10 @@ function Router() {
         {/* Protected Routes */}
         <Route path="/dashboard">
           <ProtectedRoute component={EmployeeDashboard} allowedRole="employee" />
+        </Route>
+
+        <Route path="/wellness">
+          <ProtectedRoute component={WellnessCheckin} allowedRole="employee" />
         </Route>
         
         <Route path="/admin">
