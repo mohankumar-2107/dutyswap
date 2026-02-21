@@ -14,10 +14,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function EmployeeDashboard() {
-  const { data: user } = useUser();
+  const { data: user, refetch: refetchUser } = useUser();
   const { data: tasks, isLoading: tasksLoading } = useTasks(user?.id);
   const { mutate: completeTask } = useCompleteTask();
-  const { data: stressHistory } = useStressHistory(user?.id || 0);
+  const { data: stressHistory, refetch: refetchStress } = useStressHistory(user?.id || 0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

@@ -47,7 +47,12 @@ export async function registerRoutes(
   });
 
   app.get(api.auth.me.path, async (req, res) => {
-      res.json(null);
+    // In this demo app, the "current" user is passed as employeeId in headers or query for convenience
+    // or we can simulate it for the dashboard.
+    // For now, we'll return a mock for the first employee to ensure the dashboard works
+    const employees = await storage.getEmployees();
+    const user = employees.find(e => e.role === 'employee');
+    res.json(user || null);
   });
 
   // === EMPLOYEES ===

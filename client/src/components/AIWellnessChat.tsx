@@ -44,9 +44,13 @@ export function AIWellnessChat({ employeeId }: { employeeId: number }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stress/history/${employeeId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stress/history", employeeId] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      
+      // Force immediate refetch of user data to update stress badge
+      queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
       
       const level = data.log.stressLevel === 1 ? "LOW" : data.log.stressLevel === 3 ? "MEDIUM" : "HIGH";
       let suggestion = "Keep up the great work! Remember to stay hydrated.";
