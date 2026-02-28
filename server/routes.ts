@@ -47,9 +47,14 @@ export async function registerRoutes(
   });
 
   app.get(api.auth.me.path, async (req, res) => {
-    // In this demo app, the "current" user is passed as employeeId in headers or query for convenience
-    // or we can simulate it for the dashboard.
-    // For now, we'll return a mock for the first employee to ensure the dashboard works
+    // In a real app, this would use a session. For this demo, we'll try to identify the user.
+    // If we're on the wellness page or dashboard, we might have an id in the header for the demo.
+    const employeeId = req.headers['x-employee-id'];
+    if (employeeId) {
+      const user = await storage.getEmployee(Number(employeeId));
+      if (user) return res.json(user);
+    }
+
     const employees = await storage.getEmployees();
     const user = employees.find(e => e.role === 'employee');
     res.json(user || null);
@@ -105,6 +110,27 @@ export async function registerRoutes(
       const updated = await storage.updateTaskStatus(id, 'Completed');
       if (!updated) return res.status(404).json({ message: 'Task not found' });
       res.json(updated);
+  });
+
+  app.post(api.tasks.reassign.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { newAssigneeId } = api.tasks.reassign.input.parse(req.body);
+      
+      const task = await storage.getTask(id);
+      if (!task) return res.status(404).json({ message: 'Task not found' });
+      
+      const oldAssigneeId = task.assignedToId;
+      const updatedTask = await storage.reassignTask(id, newAssigneeId);
+      
+      if (oldAssigneeId) {
+        await storage.logDutyReallocation(id, oldAssigneeId, newAssigneeId, "Manual Admin Reallocation");
+      }
+      
+      res.json(updatedTask);
+    } catch (err) {
+      res.status(400).json({ message: 'Invalid request' });
+    }
   });
 
   // === STRESS & AI CHAT LOGIC ===

@@ -12,9 +12,19 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  
+  // Try to get user from cache to add ID header for demo "session"
+  try {
+    const user = queryClient.getQueryData<any>(["/api/auth/me"]);
+    if (user?.id) {
+      headers["x-employee-id"] = user.id.toString();
+    }
+  } catch (e) {}
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type InsertTask } from "@shared/routes";
+import { api, buildUrl } from "@shared/routes";
+import { type InsertTask } from "@shared/schema";
 
 export function useTasks(employeeId?: number) {
   return useQuery({
@@ -48,6 +49,27 @@ export function useCompleteTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.tasks.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.admin.stats.path] });
+    },
+  });
+}
+
+export function useReassignTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, newAssigneeId }: { taskId: number, newAssigneeId: number }) => {
+      const url = buildUrl(api.tasks.reassign.path, { id: taskId });
+      const res = await fetch(url, {
+        method: api.tasks.reassign.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newAssigneeId }),
+      });
+      if (!res.ok) throw new Error("Failed to reassign task");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.tasks.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.admin.stats.path] });
+      queryClient.invalidateQueries({ queryKey: [api.admin.dutyLogs.path] });
     },
   });
 }

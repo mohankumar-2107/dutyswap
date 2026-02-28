@@ -19,6 +19,7 @@ export interface IStorage {
   getLowStressEmployees(excludeId: number): Promise<Employee[]>;
 
   getTasks(employeeId?: number): Promise<(Task & { assignee: Employee | null })[]>;
+  getTask(id: number): Promise<Task | undefined>;
   getPendingTasksForEmployee(employeeId: number): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTaskStatus(id: number, status: string): Promise<Task>;
@@ -97,6 +98,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     return await query;
+  }
+
+  async getTask(id: number): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task;
   }
 
   async getPendingTasksForEmployee(employeeId: number): Promise<Task[]> {

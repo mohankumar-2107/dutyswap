@@ -1,5 +1,5 @@
 import { useEmployees, useCreateEmployee } from "@/hooks/use-employees";
-import { useTasks, useCreateTask } from "@/hooks/use-tasks";
+import { useTasks, useCreateTask, useReassignTask, useCompleteTask } from "@/hooks/use-tasks";
 import { useAdminStats, useDutyLogs } from "@/hooks/use-stress";
 import { StressBadge } from "@/components/StressBadge";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
-import { Users, AlertTriangle, CheckCircle, BarChart3, Plus, Search } from "lucide-react";
+import { Users, AlertTriangle, CheckCircle, BarChart3, Plus, Search, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444']; // Green, Amber, Red
 
@@ -21,10 +23,28 @@ export default function AdminDashboard() {
   const { data: stats } = useAdminStats();
   const { mutate: createEmployee } = useCreateEmployee();
   const { mutate: createTask } = useCreateTask();
+  const { data: allTasks } = useTasks();
   const { toast } = useToast();
 
   const [isEmployeeOpen, setIsEmployeeOpen] = useState(false);
   const [isTaskOpen, setIsTaskOpen] = useState(false);
+  const [isReassignOpen, setIsReassignOpen] = useState(false);
+  
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [newAssignee, setNewAssignee] = useState("");
+
+  const reassignMutation = useReassignTask();
+
+  const handleReassign = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !newAssignee) return;
+    reassignMutation.mutate({ taskId: selectedTask.id, newAssigneeId: parseInt(newAssignee) }, {
+      onSuccess: () => {
+        setIsReassignOpen(false);
+        toast({ title: "Task Reassigned", description: "The task has been successfully moved." });
+      }
+    });
+  };
   
   // Employee Form State
   const [empName, setEmpName] = useState("");
@@ -64,10 +84,14 @@ export default function AdminDashboard() {
   };
 
   const pieData = stats ? [
-    { name: 'Low', value: stats.lowStress },
-    { name: 'Medium', value: stats.mediumStress },
-    { name: 'High', value: stats.highStress },
-  ] : [];
+    { name: 'Low', value: stats.lowStress || 0 },
+    { name: 'Medium', value: stats.mediumStress || 0 },
+    { name: 'High', value: stats.highStress || 0 },
+  ] : [
+    { name: 'Low', value: 0 },
+    { name: 'Medium', value: 0 },
+    { name: 'High', value: 0 },
+  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -138,7 +162,7 @@ export default function AdminDashboard() {
                 <div className="space-y-2">
                   <Label>Assignee</Label>
                   <Select value={taskAssignee} onValueChange={setTaskAssignee}>
-                    <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Select employee" /></SelectTrigger>
                     <SelectContent>
                       {employees?.map(emp => (
                         <SelectItem key={emp.id} value={emp.id.toString()}>{emp.name}</SelectItem>
@@ -146,7 +170,7 @@ export default function AdminDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" className="w-full">Assign Task</Button>
+                <Button type="submit" className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-xl">Assign Task</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -155,47 +179,55 @@ export default function AdminDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="glass-panel border-l-4 border-l-blue-500">
+        <Card className="glass-panel border-l-4 border-l-blue-500 rounded-[2rem]">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Staff</p>
-                <h3 className="text-2xl font-bold">{stats?.totalEmployees || 0}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Staff</p>
+                <h3 className="text-3xl font-black text-gray-900 leading-none">{stats?.totalEmployees || 0}</h3>
               </div>
-              <Users className="w-8 h-8 text-blue-500 opacity-20" />
+              <div className="p-3 bg-blue-50 rounded-2xl">
+                <Users className="w-6 h-6 text-blue-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="glass-panel border-l-4 border-l-green-500">
+        <Card className="glass-panel border-l-4 border-l-green-500 rounded-[2rem]">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Low Stress</p>
-                <h3 className="text-2xl font-bold text-green-600">{stats?.lowStress || 0}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Low Stress</p>
+                <h3 className="text-3xl font-black text-green-600 leading-none">{stats?.lowStress || 0}</h3>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-500 opacity-20" />
+              <div className="p-3 bg-green-50 rounded-2xl">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="glass-panel border-l-4 border-l-amber-500">
+        <Card className="glass-panel border-l-4 border-l-amber-500 rounded-[2rem]">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Reallocations</p>
-                <h3 className="text-2xl font-bold text-amber-600">{stats?.reassignedTasks || 0}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Reallocations</p>
+                <h3 className="text-3xl font-black text-amber-600 leading-none">{stats?.reassignedTasks || 0}</h3>
               </div>
-              <BarChart3 className="w-8 h-8 text-amber-500 opacity-20" />
+              <div className="p-3 bg-amber-50 rounded-2xl">
+                <BarChart3 className="w-6 h-6 text-amber-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="glass-panel border-l-4 border-l-red-500">
+        <Card className="glass-panel border-l-4 border-l-red-500 rounded-[2rem]">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">High Stress</p>
-                <h3 className="text-2xl font-bold text-red-600">{stats?.highStress || 0}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">High Stress</p>
+                <h3 className="text-3xl font-black text-red-600 leading-none">{stats?.highStress || 0}</h3>
               </div>
-              <AlertTriangle className="w-8 h-8 text-red-500 opacity-20" />
+              <div className="p-3 bg-red-50 rounded-2xl">
+                <AlertTriangle className="w-6 h-6 text-red-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -210,33 +242,52 @@ export default function AdminDashboard() {
               <CardDescription>Real-time stress monitoring for all employees.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {employees?.map((emp) => (
-                    <TableRow key={emp.id}>
-                      <TableCell className="font-medium">{emp.name}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{emp.role}</TableCell>
-                      <TableCell><StressBadge level={emp.currentStress} /></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">Details</Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-gray-100">
+                      <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Employee</TableHead>
+                      <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Role</TableHead>
+                      <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Status</TableHead>
+                      <TableHead className="text-right text-xs font-black text-gray-400 uppercase tracking-widest">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {employees?.map((emp) => (
+                      <TableRow key={emp.id} className="hover:bg-yellow-50/30 transition-colors border-gray-50">
+                        <TableCell className="font-bold text-gray-900">{emp.name}</TableCell>
+                        <TableCell className="capitalize font-medium text-gray-500">{emp.role}</TableCell>
+                        <TableCell><StressBadge level={emp.currentStress} /></TableCell>
+                        <TableCell className="text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="rounded-xl font-bold text-yellow-600 hover:text-yellow-700 hover:bg-yellow-100"
+                            onClick={() => {
+                              const task = allTasks?.find(t => t.assignedToId === emp.id && t.status === 'Pending');
+                              if (task) {
+                                setSelectedTask(task);
+                                setNewAssignee(""); // Reset assignee when picking a new task
+                                // Scroll to the reallocation card for better UX
+                                document.getElementById('manual-reallocation-card')?.scrollIntoView({ behavior: 'smooth' });
+                              } else {
+                                toast({ title: "No Pending Tasks", description: `${emp.name} has no pending tasks to reallocate.` });
+                              }
+                            }}
+                          >
+                            Manage Tasks
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts */}
+        {/* Charts and Reallocation */}
         <div className="space-y-6">
           <Card className="glass-card">
             <CardHeader>
@@ -266,6 +317,71 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500"></div> Medium</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> High</div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card" id="manual-reallocation-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5 text-yellow-500" />
+                Manual Reallocation
+              </CardTitle>
+              <CardDescription>Shift tasks between employees manually.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-black text-gray-400">Select Task to Move</Label>
+                <Select 
+                  value={selectedTask?.id?.toString() || ""} 
+                  onValueChange={(val) => {
+                    setSelectedTask(allTasks?.find(t => t.id === parseInt(val)));
+                    setNewAssignee("");
+                  }}
+                >
+                  <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Choose a pending task..." /></SelectTrigger>
+                  <SelectContent>
+                    {allTasks?.filter(t => t.status === 'Pending').map(task => (
+                      <SelectItem key={task.id} value={task.id.toString()}>
+                        {task.title} (Currently: {task.assignee?.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedTask && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-100">
+                    <p className="text-xs font-bold text-yellow-800">Current Assignee Stress:</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <StressBadge level={selectedTask.assignee?.currentStress} />
+                      <span className="text-xs text-yellow-700">{selectedTask.assignee?.name}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase font-black text-gray-400">Move To (Low Stress Only)</Label>
+                    <Select value={newAssignee} onValueChange={setNewAssignee}>
+                      <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Select replacement..." /></SelectTrigger>
+                      <SelectContent>
+                        {employees?.filter(e => e.id !== selectedTask.assignedToId && e.role === 'employee' && (e.currentStress || 0) <= 2).map(emp => (
+                          <SelectItem key={emp.id} value={emp.id.toString()}>
+                            {emp.name} (Stress: {emp.currentStress || 0})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button 
+                    className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-xl"
+                    onClick={handleReassign}
+                    disabled={!newAssignee || reassignMutation.isPending}
+                  >
+                    Confirm Manual Swap
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

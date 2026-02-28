@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type InsertEmployee } from "@shared/routes";
+import { api, buildUrl } from "@shared/routes";
+import { type InsertEmployee } from "@shared/schema";
 
 export function useEmployees() {
   return useQuery({

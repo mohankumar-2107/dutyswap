@@ -1,182 +1,83 @@
+import { z } from "zod";
+import { insertEmployeeSchema, insertTaskSchema, insertStressLogSchema, insertMessageSchema } from "./schema";
 
-import { z } from 'zod';
-import { insertEmployeeSchema, insertTaskSchema, insertStressLogSchema, insertMessageSchema, employees, tasks, stressLogs, dutyLogs, messages } from './schema';
-
-export const errorSchemas = {
-  validation: z.object({
-    message: z.string(),
-    field: z.string().optional(),
-  }),
-  notFound: z.object({
-    message: z.string(),
-  }),
-  internal: z.object({
-    message: z.string(),
-  }),
-};
+/**
+ * Builds a URL by replacing path parameters (e.g., :id) with actual values.
+ */
+export function buildUrl(path: string, params: Record<string, string | number>) {
+  let url = path;
+  for (const [key, value] of Object.entries(params)) {
+    url = url.replace(`:${key}`, value.toString());
+  }
+  return url;
+}
 
 export const api = {
   auth: {
     login: {
-      method: 'POST' as const,
-      path: '/api/auth/login' as const,
+      path: "/api/auth/login",
+      method: "POST",
       input: z.object({
-        username: z.string().optional(), // For admin
-        password: z.string().optional(), // For admin
-        employeeId: z.number().optional(), // For employee demo login
         role: z.enum(['admin', 'employee']),
-      }),
-      responses: {
-        200: z.custom<typeof employees.$inferSelect>(),
-        401: z.object({ message: z.string() }),
-      },
+        username: z.string().optional(),
+        password: z.string().optional(),
+        employeeId: z.number().optional(),
+      })
     },
-    logout: {
-      method: 'POST' as const,
-      path: '/api/auth/logout' as const,
-      responses: {
-        200: z.object({ message: z.string() }),
-      },
-    },
-    me: {
-        method: 'GET' as const,
-        path: '/api/auth/me' as const,
-        responses: {
-            200: z.custom<typeof employees.$inferSelect>(),
-            401: z.null()
-        }
-    }
+    logout: { path: "/api/auth/logout", method: "POST" },
+    me: { path: "/api/auth/me", method: "GET" }
   },
   employees: {
-    list: {
-      method: 'GET' as const,
-      path: '/api/employees' as const,
-      responses: {
-        200: z.array(z.custom<typeof employees.$inferSelect>()),
-      },
+    list: { path: "/api/employees", method: "GET" },
+    create: { 
+      path: "/api/employees",
+      method: "POST",
+      input: insertEmployeeSchema
     },
-    create: {
-      method: 'POST' as const,
-      path: '/api/employees' as const,
-      input: insertEmployeeSchema,
-      responses: {
-        201: z.custom<typeof employees.$inferSelect>(),
-        400: errorSchemas.validation,
-      },
-    },
-    get: {
-      method: 'GET' as const,
-      path: '/api/employees/:id' as const,
-      responses: {
-        200: z.custom<typeof employees.$inferSelect & { stressLogs: typeof stressLogs.$inferSelect[] }>(),
-        404: errorSchemas.notFound,
-      },
-    },
+    get: { path: "/api/employees/:id", method: "GET" }
   },
   tasks: {
-    list: {
-      method: 'GET' as const,
-      path: '/api/tasks' as const,
-      input: z.object({
-        employeeId: z.string().optional(), // Filter by assignee
-      }).optional(),
-      responses: {
-        200: z.array(z.custom<typeof tasks.$inferSelect & { assignee: typeof employees.$inferSelect | null }>()),
-      },
-    },
+    list: { path: "/api/tasks", method: "GET" },
     create: {
-      method: 'POST' as const,
-      path: '/api/tasks' as const,
-      input: insertTaskSchema,
-      responses: {
-        201: z.custom<typeof tasks.$inferSelect>(),
-        400: errorSchemas.validation,
-      },
+      path: "/api/tasks",
+      method: "POST",
+      input: insertTaskSchema
     },
-    complete: {
-      method: 'PATCH' as const,
-      path: '/api/tasks/:id/complete' as const,
-      responses: {
-        200: z.custom<typeof tasks.$inferSelect>(),
-        404: errorSchemas.notFound,
-      },
-    },
+    complete: { path: "/api/tasks/:id/complete", method: "PATCH" },
+    reassign: {
+      path: "/api/tasks/:id/reassign",
+      method: "POST",
+      input: z.object({ newAssigneeId: z.number() })
+    }
   },
   stress: {
     log: {
-      method: 'POST' as const,
-      path: '/api/stress' as const,
-      input: insertStressLogSchema,
-      responses: {
-        200: z.object({
-          log: z.custom<typeof stressLogs.$inferSelect>(),
-          reallocation: z.boolean(), // True if tasks were reallocated
-          message: z.string().optional()
-        }),
-        400: errorSchemas.validation,
-      },
+      path: "/api/stress",
+      method: "POST",
+      input: z.object({
+        employeeId: z.number(),
+        totalScore: z.number(),
+        answers: z.array(z.number())
+      })
     },
-    history: {
-        method: 'GET' as const,
-        path: '/api/stress/history/:employeeId' as const,
-        responses: {
-            200: z.array(z.custom<typeof stressLogs.$inferSelect>())
-        }
-    }
+    history: { path: "/api/stress/history/:employeeId", method: "GET" }
   },
   admin: {
-    stats: {
-      method: 'GET' as const,
-      path: '/api/admin/stats' as const,
-      responses: {
-        200: z.object({
-          totalEmployees: z.number(),
-          lowStress: z.number(),
-          mediumStress: z.number(),
-          highStress: z.number(),
-          reassignedTasks: z.number(),
-        }),
-      },
-    },
-    dutyLogs: {
-      method: 'GET' as const,
-      path: '/api/admin/duty-logs' as const,
-      responses: {
-        200: z.array(z.custom<typeof dutyLogs.$inferSelect & { 
-            task: typeof tasks.$inferSelect | null,
-            fromEmployee: typeof employees.$inferSelect | null,
-            toEmployee: typeof employees.$inferSelect | null
-        }>()),
-      },
-    },
+    stats: { path: "/api/admin/stats", method: "GET" },
+    dutyLogs: { path: "/api/admin/duty_logs", method: "GET" }
   },
   messages: {
     create: {
-      method: 'POST' as const,
-      path: '/api/messages' as const,
-      input: insertMessageSchema,
-      responses: {
-        201: z.custom<typeof messages.$inferSelect>(),
-      },
+      path: "/api/messages",
+      method: "POST",
+      input: insertMessageSchema
     },
-    list: {
-      method: 'GET' as const,
-      path: '/api/messages' as const,
-      responses: {
-        200: z.array(z.custom<typeof messages.$inferSelect & { employee: typeof employees.$inferSelect | null }>()),
-      },
-    },
-  },
+    list: { path: "/api/messages", method: "GET" }
+  }
 };
 
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
-  let url = path;
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (url.includes(`:${key}`)) {
-        url = url.replace(`:${key}`, String(value));
-      }
-    });
-  }
-  return url;
-}
+export const errorSchemas = {
+  badRequest: z.object({ message: z.string() }),
+  unauthorized: z.object({ message: z.string() }),
+  notFound: z.object({ message: z.string() }),
+};

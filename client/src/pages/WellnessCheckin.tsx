@@ -38,10 +38,13 @@ export default function WellnessCheckin() {
       return res.json();
     },
     onSuccess: (data) => {
+      // Invalidate all related queries to ensure dashboard updates
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/stress/history", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       
       toast({
         title: "Check-in Complete",
