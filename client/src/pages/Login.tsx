@@ -27,7 +27,8 @@ export default function Login() {
     login(
       { role: 'admin', username: adminUser, password: adminPass },
       {
-        onSuccess: () => {
+        onSuccess: (user) => {
+          localStorage.setItem("last_employee_id", user.id.toString());
           toast({ title: "Welcome back, Admin!", description: "Accessing secure dashboard." });
           setLocation("/admin");
         },
@@ -43,7 +44,8 @@ export default function Login() {
     login(
       { role: 'employee', employeeId: parseInt(selectedEmployeeId) },
       {
-        onSuccess: () => {
+        onSuccess: (user) => {
+          localStorage.setItem("last_employee_id", user.id.toString());
           toast({ title: "Welcome!", description: "Logging into your dashboard." });
           setLocation("/dashboard");
         },

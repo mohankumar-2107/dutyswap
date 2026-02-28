@@ -47,14 +47,16 @@ export async function registerRoutes(
   });
 
   app.get(api.auth.me.path, async (req, res) => {
-    // In a real app, this would use a session. For this demo, we'll try to identify the user.
-    // If we're on the wellness page or dashboard, we might have an id in the header for the demo.
+    // Check for employeeId in headers first (set by apiRequest in client)
     const employeeId = req.headers['x-employee-id'];
-    if (employeeId) {
+    
+    if (employeeId && !isNaN(Number(employeeId))) {
       const user = await storage.getEmployee(Number(employeeId));
       if (user) return res.json(user);
     }
 
+    // Fallback: If no header, we can't reliably know who the user is in this demo without a session
+    // But we'll return the first employee as a fallback to keep the dashboard working for the first login
     const employees = await storage.getEmployees();
     const user = employees.find(e => e.role === 'employee');
     res.json(user || null);
@@ -151,13 +153,17 @@ export async function registerRoutes(
       }
 
       const logData = {
-        ...input,
+        employeeId: input.employeeId,
+        totalScore: input.totalScore,
+        answers: input.answers,
         stressLevel: calculatedLevel,
       };
       
+      console.log(`Logging stress data for employee ${input.employeeId}:`, logData);
       const log = await storage.logStress(logData);
       
       // Update employee current stress
+      console.log(`Updating current stress for employee ${input.employeeId} to ${calculatedLevel}`);
       await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
       
       // AI Reallocation Logic

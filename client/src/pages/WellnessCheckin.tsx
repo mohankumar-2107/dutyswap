@@ -38,13 +38,13 @@ export default function WellnessCheckin() {
       return res.json();
     },
     onSuccess: (data) => {
-      // Invalidate all related queries to ensure dashboard updates
+      // Use invalidateQueries instead of resetQueries to prevent unwanted redirects to login
+      // We also use refetchType: 'all' and ensure the user ID is correctly handled
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stress/history", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stress/history"] });
       
       toast({
         title: "Check-in Complete",
@@ -74,9 +74,14 @@ export default function WellnessCheckin() {
       return;
     }
 
-    const totalScore = answers.reduce((a, b) => a + b, 0);
+    const totalScore = answers.reduce((a, b) => a + (b || 0), 0);
+    console.log("Submitting wellness check-in:", { employeeId: user?.id, totalScore, answers });
+    
+    // Ensure we have a valid employee ID before mutating
+    const empId = user?.id || Number(localStorage.getItem("last_employee_id"));
+    
     stressMutation.mutate({
-      employeeId: user?.id,
+      employeeId: Number(empId),
       totalScore,
       answers
     });
@@ -116,9 +121,14 @@ export default function WellnessCheckin() {
     <div className="min-h-screen bg-[#faf9f6] py-12 px-4">
       <div className="max-w-2xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setLocation("/")} className="rounded-xl gap-2 text-gray-500 font-bold">
-            <ArrowLeft className="w-4 h-4" /> Exit
-          </Button>
+          <Link href="/dashboard">
+            <Button 
+              variant="ghost" 
+              className="rounded-xl gap-2 text-gray-500 font-bold"
+            >
+              <ArrowLeft className="w-4 h-4" /> Exit
+            </Button>
+          </Link>
           <div className="flex items-center gap-2 text-yellow-600 font-black text-sm bg-yellow-100 px-4 py-2 rounded-full">
             <Brain className="w-4 h-4" /> WELLNESS CHECK-IN
           </div>

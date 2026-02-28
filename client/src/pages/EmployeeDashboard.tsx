@@ -16,12 +16,24 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
 export default function EmployeeDashboard() {
-  const { data: user, refetch: refetchUser } = useUser();
+  const { data: user, refetch: refetchUser, isLoading: userLoading } = useUser();
   const { data: tasks, isLoading: tasksLoading } = useTasks(user?.id);
   const { mutate: completeTask } = useCompleteTask();
-  const { data: stressHistory, refetch: refetchStress } = useStressHistory(user?.id || 0);
-  const { toast } = useToast();
+  const { data: stressHistory, refetch: refetchStress, isLoading: stressLoading } = useStressHistory(user?.id || 0);
+
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Force a refresh when dashboard mounts to catch latest wellness data
+    if (user?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stress/history", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    }
+  }, [user?.id, queryClient]);
+
+  const { toast } = useToast();
 
   const helpMutation = useMutation({
     mutationFn: async () => {
@@ -42,8 +54,7 @@ export default function EmployeeDashboard() {
 
   if (!user) return null;
 
-  const isBurnoutRisk = stressHistory && stressHistory.length >= 3 && 
-    stressHistory.slice(-3).every((log: any) => log.stressLevel >= 4);
+  const isBurnoutRisk = (user.currentStress || 0) >= 4;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-4 pb-12">

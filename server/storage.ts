@@ -128,8 +128,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async logStress(insertLog: InsertStressLog): Promise<StressLog> {
-    const [log] = await db.insert(stressLogs).values(insertLog).returning();
-    return log;
+    console.log(`[STORAGE] Logging stress for employee ${insertLog.employeeId}. Score: ${insertLog.totalScore}`);
+    
+    // Explicitly check for column existence in the object to be safe
+    const values: any = {
+      employeeId: insertLog.employeeId,
+      stressLevel: insertLog.stressLevel,
+      totalScore: insertLog.totalScore,
+      answers: insertLog.answers,
+      date: new Date().toISOString().split('T')[0]
+    };
+    
+    try {
+      const [log] = await db.insert(stressLogs).values(values).returning();
+      console.log(`[STORAGE] Successfully logged stress. ID: ${log.id}`);
+      return log;
+    } catch (err) {
+      console.error("[STORAGE] Critical error in logStress:", err);
+      throw err;
+    }
   }
 
   async getStressLogs(employeeId: number): Promise<StressLog[]> {

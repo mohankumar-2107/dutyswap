@@ -16,9 +16,17 @@ export async function apiRequest(
   
   // Try to get user from cache to add ID header for demo "session"
   try {
+    let userId = "";
     const user = queryClient.getQueryData<any>(["/api/auth/me"]);
     if (user?.id) {
-      headers["x-employee-id"] = user.id.toString();
+      userId = user.id.toString();
+    } else {
+      const storedId = localStorage.getItem("last_employee_id");
+      if (storedId) userId = storedId;
+    }
+    
+    if (userId) {
+      headers["x-employee-id"] = userId;
     }
   } catch (e) {}
 
