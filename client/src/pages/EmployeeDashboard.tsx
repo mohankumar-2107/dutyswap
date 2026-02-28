@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useUser } from "@/hooks/use-auth";
 import { useTasks, useCompleteTask } from "@/hooks/use-tasks";
 import { useStressHistory } from "@/hooks/use-stress";
