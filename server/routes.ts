@@ -47,7 +47,6 @@ export async function registerRoutes(
   });
 
   app.get(api.auth.me.path, async (req, res) => {
-    // Check for employeeId in headers first (set by apiRequest in client)
     const employeeId = req.headers['x-employee-id'];
     
     if (employeeId && !isNaN(Number(employeeId))) {
@@ -55,8 +54,6 @@ export async function registerRoutes(
       if (user) return res.json(user);
     }
 
-    // In this demo without sessions, if no header is present, we return null
-    // rather than falling back to the first employee, to avoid "sticky" logins.
     res.json(null);
   });
 
@@ -138,10 +135,6 @@ export async function registerRoutes(
     try {
       const input = api.stress.log.input.parse(req.body);
       
-      // Calculate stress level based on total score (0-40)
-      // 0-15 -> 1 (Low)
-      // 16-25 -> 3 (Medium)
-      // 26-40 -> 5 (High)
       let calculatedLevel = 1;
       const score = input.totalScore || 0;
       if (score > 25) {
@@ -160,11 +153,8 @@ export async function registerRoutes(
       console.log(`Logging stress data for employee ${input.employeeId}:`, logData);
       const log = await storage.logStress(logData);
       
-      // Update employee current stress
-      console.log(`Updating current stress for employee ${input.employeeId} to ${calculatedLevel}`);
       await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
       
-      // AI Reallocation Logic
       let reallocation = false;
       let message = "Wellness check-in completed. Your stress level is " + (calculatedLevel === 1 ? "Low" : calculatedLevel === 3 ? "Medium" : "High") + ".";
 
@@ -172,19 +162,32 @@ export async function registerRoutes(
           const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
           
           if (pendingTasks.length > 0) {
-              const candidates = await storage.getLowStressEmployees(input.employeeId);
-              
-              if (candidates.length > 0) {
-                  const targetEmployee = candidates[0];
-                  const taskToMove = pendingTasks[0];
+              const history = await storage.getStressLogs(input.employeeId);
+              const today = new Date().toISOString().split('T')[0];
+              const todayLogs = history.filter(l => l.date === today);
+              const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+              const yesterdayLogs = history.filter(l => l.date === yesterday);
+
+              const isHighYesterday = yesterdayLogs.some(l => l.stressLevel === 5);
+              const isHighToday = todayLogs.some(l => l.stressLevel === 5);
+
+              if (isHighYesterday && isHighToday) {
+                  const candidates = await storage.getLowStressEmployees(input.employeeId);
                   
-                  await storage.reassignTask(taskToMove.id, targetEmployee.id);
-                  await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `High Stress (Score: ${score}) detected via Wellness Chat`);
-                  
-                  reallocation = true;
-                  message = `High stress detected (Score: ${score}). Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name} to support your wellness.`;
-              } else {
-                  message = `High stress detected (Score: ${score}), but no available low-stress employees found. Please contact Admin.`;
+                  if (candidates.length > 0) {
+                      const targetEmployee = candidates[0];
+                      const taskToMove = pendingTasks[0];
+                      
+                      await storage.reassignTask(taskToMove.id, targetEmployee.id);
+                      await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `Persistent High Stress (Yesterday & Today) detected via Wellness Chat`);
+                      
+                      reallocation = true;
+                      message = `Persistent high stress detected. Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name} to support your wellness.`;
+                  } else {
+                      message = `High stress detected, but no available low-stress employees found. Please contact Admin.`;
+                  }
+              } else if (isHighToday) {
+                  message = "High stress detected today. We will monitor your status. If it remains high tomorrow, we will automatically reallocate tasks.";
               }
           }
       }
