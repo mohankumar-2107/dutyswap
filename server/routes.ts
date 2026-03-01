@@ -55,11 +55,9 @@ export async function registerRoutes(
       if (user) return res.json(user);
     }
 
-    // Fallback: If no header, we can't reliably know who the user is in this demo without a session
-    // But we'll return the first employee as a fallback to keep the dashboard working for the first login
-    const employees = await storage.getEmployees();
-    const user = employees.find(e => e.role === 'employee');
-    res.json(user || null);
+    // In this demo without sessions, if no header is present, we return null
+    // rather than falling back to the first employee, to avoid "sticky" logins.
+    res.json(null);
   });
 
   // === EMPLOYEES ===

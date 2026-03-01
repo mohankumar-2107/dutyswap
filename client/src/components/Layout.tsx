@@ -8,7 +8,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { mutate: logout } = useLogout();
   const [location] = useLocation();
 
-  if (!user) return <div className="min-h-screen">{children}</div>;
+  if (!user || location === '/') return <div className="min-h-screen">{children}</div>;
 
   return (
     <div className="min-h-screen bg-transparent flex flex-col md:flex-row">
