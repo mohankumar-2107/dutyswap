@@ -249,6 +249,7 @@ export default function AdminDashboard() {
                       <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Employee</TableHead>
                       <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Role</TableHead>
                       <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest">Status</TableHead>
+                      <TableHead className="text-xs font-black text-gray-400 uppercase tracking-widest text-center">Daily Update</TableHead>
                       <TableHead className="text-right text-xs font-black text-gray-400 uppercase tracking-widest">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -258,6 +259,11 @@ export default function AdminDashboard() {
                         <TableCell className="font-bold text-gray-900">{emp.name}</TableCell>
                         <TableCell className="capitalize font-medium text-gray-500">{emp.role}</TableCell>
                         <TableCell><StressBadge level={emp.currentStress} /></TableCell>
+                        <TableCell className="text-center">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${emp.role === 'admin' ? 'hidden' : (emp as any).updatedToday ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {emp.role === 'admin' ? '' : (emp as any).updatedToday ? 'COMPLETE' : 'PENDING'}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button 
                             variant="ghost" 

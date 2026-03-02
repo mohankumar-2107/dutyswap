@@ -1,14 +1,15 @@
 
 import { db } from "./db";
 import {
-  employees, tasks, stressLogs, dutyLogs, messages,
+  employees, tasks, stressLogs, dutyLogs, messages, notifications,
   type Employee, type InsertEmployee,
   type Task, type InsertTask,
   type StressLog, type InsertStressLog,
   type DutyLog,
-  type Message, type InsertMessage
+  type Message, type InsertMessage,
+  type Notification, type InsertNotification
 } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, ne, lt } from "drizzle-orm";
 
 export interface IStorage {
   getEmployees(): Promise<Employee[]>;
@@ -33,6 +34,9 @@ export interface IStorage {
 
   createMessage(message: InsertMessage): Promise<Message>;
   getMessages(): Promise<(Message & { employee: Employee | null })[]>;
+
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotifications(employeeId: number): Promise<Notification[]>;
 
   getAdminStats(): Promise<{
     totalEmployees: number;
@@ -74,7 +78,7 @@ export class DatabaseStorage implements IStorage {
 
   async getLowStressEmployees(excludeId: number): Promise<Employee[]> {
     return await db.select().from(employees).where(and(
-        sql`${employees.currentStress} <= 2`,
+        sql`${employees.currentStress} < 7`,
         sql`${employees.id} != ${excludeId}`,
         eq(employees.role, 'employee')
     ));
@@ -130,7 +134,6 @@ export class DatabaseStorage implements IStorage {
   async logStress(insertLog: InsertStressLog): Promise<StressLog> {
     console.log(`[STORAGE] Logging stress for employee ${insertLog.employeeId}. Score: ${insertLog.totalScore}`);
     
-    // Explicitly check for column existence in the object to be safe
     const values: any = {
       employeeId: insertLog.employeeId,
       stressLevel: insertLog.stressLevel,
@@ -186,6 +189,15 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values(insertNotification).returning();
+    return notification;
+  }
+
+  async getNotifications(employeeId: number): Promise<Notification[]> {
+    return await db.select().from(notifications).where(eq(notifications.employeeId, employeeId)).orderBy(desc(notifications.timestamp));
+  }
+
   async getAdminStats(): Promise<{
     totalEmployees: number;
     lowStress: number;
@@ -194,9 +206,9 @@ export class DatabaseStorage implements IStorage {
     reassignedTasks: number;
   }> {
     const allEmployees = await db.select().from(employees);
-    const low = allEmployees.filter(e => (e.currentStress || 0) <= 2 && e.role === 'employee').length;
-    const medium = allEmployees.filter(e => (e.currentStress || 0) === 3 && e.role === 'employee').length;
-    const high = allEmployees.filter(e => (e.currentStress || 0) >= 4 && e.role === 'employee').length;
+    const low = allEmployees.filter(e => (e.currentStress || 0) < 7 && e.role === 'employee').length;
+    const medium = allEmployees.filter(e => (e.currentStress || 0) >= 7 && (e.currentStress || 0) < 25 && e.role === 'employee').length;
+    const high = allEmployees.filter(e => (e.currentStress || 0) >= 25 && e.role === 'employee').length;
     const total = allEmployees.filter(e => e.role === 'employee').length;
     const logsCount = (await db.select().from(dutyLogs)).length;
     

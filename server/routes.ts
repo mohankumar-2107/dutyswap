@@ -66,8 +66,17 @@ export async function registerRoutes(
 
   // === EMPLOYEES ===
   app.get(api.employees.list.path, async (req, res) => {
-    const employees = await storage.getEmployees();
-    res.json(employees);
+    const list = await storage.getEmployees();
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Add update status for each employee
+    const enriched = await Promise.all(list.map(async emp => {
+      const logs = await storage.getStressLogs(emp.id);
+      const updatedToday = logs.some(l => l.date === today);
+      return { ...emp, updatedToday };
+    }));
+    
+    res.json(enriched);
   });
 
   app.post(api.employees.create.path, async (req, res) => {
@@ -142,69 +151,84 @@ export async function registerRoutes(
     try {
       const input = api.stress.log.input.parse(req.body);
       
-      let calculatedLevel = 1;
       const score = input.totalScore || 0;
-      if (score > 25) {
-        calculatedLevel = 5;
-      } else if (score > 15) {
-        calculatedLevel = 3;
-      }
+      // Levels for legacy charts: 1 (Low < 7), 3 (Med 7-24), 5 (High 25+)
+      let calculatedLevel = 1;
+      if (score >= 25) calculatedLevel = 5;
+      else if (score >= 7) calculatedLevel = 3;
 
       const logData = {
         employeeId: input.employeeId,
-        totalScore: input.totalScore,
+        totalScore: score,
         answers: input.answers,
         stressLevel: calculatedLevel,
       };
       
-      console.log(`Logging stress data for employee ${input.employeeId}:`, logData);
       const log = await storage.logStress(logData);
-      
-      await storage.updateEmployeeStress(input.employeeId, calculatedLevel);
+      const employee = await storage.updateEmployeeStress(input.employeeId, score);
       
       let reallocation = false;
-      let message = "Wellness check-in completed. Your stress level is " + (calculatedLevel === 1 ? "Low" : calculatedLevel === 3 ? "Medium" : "High") + ".";
+      let message = `Wellness check-in completed. Your stress score is ${score}.`;
 
-      if (calculatedLevel === 5) {
+      // NEW AI LOGIC: If stress >= 7 and more than 1 task, reallocate extra tasks keeping 1.
+      if (score >= 7) {
           const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
           
-          if (pendingTasks.length > 0) {
-              const history = await storage.getStressLogs(input.employeeId);
-              const today = new Date().toISOString().split('T')[0];
-              const todayLogs = history.filter(l => l.date === today);
-              const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-              const yesterdayLogs = history.filter(l => l.date === yesterday);
-
-              const isHighYesterday = yesterdayLogs.some(l => l.stressLevel === 5);
-              const isHighToday = todayLogs.some(l => l.stressLevel === 5);
-
-              if (isHighYesterday && isHighToday) {
-                  const candidates = await storage.getLowStressEmployees(input.employeeId);
+          if (pendingTasks.length > 1) {
+              const candidates = await storage.getLowStressEmployees(input.employeeId);
+              
+              if (candidates.length > 0) {
+                  // Greedy load balancing: Sort by lowest stress then least tasks
+                  const candidatesWithLoad = await Promise.all(candidates.map(async c => {
+                    const tasks = await storage.getPendingTasksForEmployee(c.id);
+                    return { employee: c, taskCount: tasks.length };
+                  }));
                   
-                  if (candidates.length > 0) {
-                      const targetEmployee = candidates[0];
-                      const taskToMove = pendingTasks[0];
-                      
-                      await storage.reassignTask(taskToMove.id, targetEmployee.id);
-                      await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `Persistent High Stress (Yesterday & Today) detected via Wellness Chat`);
-                      
-                      reallocation = true;
-                      message = `Persistent high stress detected. Task "${taskToMove.title}" has been reassigned to ${targetEmployee.name} to support your wellness.`;
-                  } else {
-                      message = `High stress detected, but no available low-stress employees found. Please contact Admin.`;
+                  candidatesWithLoad.sort((a, b) => {
+                    if (a.employee.currentStress !== b.employee.currentStress) {
+                      return (a.employee.currentStress || 0) - (b.employee.currentStress || 0);
+                    }
+                    return a.taskCount - b.taskCount;
+                  });
+                  
+                  const targetEmployee = candidatesWithLoad[0].employee;
+                  const extraTasks = pendingTasks.slice(1);
+                  
+                  for (const taskToMove of extraTasks) {
+                    await storage.reassignTask(taskToMove.id, targetEmployee.id);
+                    await storage.logDutyReallocation(taskToMove.id, input.employeeId, targetEmployee.id, `AI Auto-Reallocation (Stress: ${score})`);
+                    
+                    // Sender notification
+                    await storage.createNotification({
+                      employeeId: input.employeeId,
+                      message: `Your task "${taskToMove.title}" has been reassigned to ${targetEmployee.name} due to high stress workload balancing.`
+                    });
+                    
+                    // Receiver notification
+                    await storage.createNotification({
+                      employeeId: targetEmployee.id,
+                      message: `You have received an additional task "${taskToMove.title}" reassigned from ${employee.name}.`
+                    });
                   }
-              } else if (isHighToday) {
-                  message = "High stress detected today. We will monitor your status. If it remains high tomorrow, we will automatically reallocate tasks.";
+                  
+                  reallocation = true;
+                  message = `High stress detected. ${extraTasks.length} extra tasks reallocated to ${targetEmployee.name}. You kept 1 task.`;
               }
           }
       }
 
       res.json({ log, reallocation, message });
-
     } catch (err) {
       console.error(err);
       res.status(400).json({ message: 'Validation error' });
     }
+  });
+
+  app.get("/api/notifications", async (req, res) => {
+    const employeeId = req.headers['x-employee-id'];
+    if (!employeeId) return res.json([]);
+    const list = await storage.getNotifications(Number(employeeId));
+    res.json(list);
   });
 
   app.get(api.stress.history.path, async (req, res) => {

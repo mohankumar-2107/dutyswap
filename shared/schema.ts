@@ -121,5 +121,21 @@ export type InsertStressLog = z.infer<typeof insertStressLogSchema>;
 export type DutyLog = typeof dutyLogs.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 
-// For API responses
-export type EmployeeWithLogs = Employee & { stressLogs: StressLog[] };
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id),
+  message: text("message").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  readStatus: boolean("read_status").default(false),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  employee: one(employees, {
+    fields: [notifications.employeeId],
+    references: [employees.id],
+  }),
+}));
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, timestamp: true, readStatus: true });
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;

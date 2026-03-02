@@ -1,0 +1,143 @@
+Implement a safe and correct automatic task reallocation system with employee notifications.
+Do NOT modify login/auth system.
+Do NOT break existing features.
+Only improve AI reallocation logic.
+
+🎯 CORE LOGIC
+
+If an employee (example: Bob Smith) has HIGH stress:
+
+Case 1: Only one simple task
+
+→ Do NOT reassign
+→ No notification
+→ System should remain stable
+
+Case 2: More than one task
+
+→ Keep one task
+→ Reassign remaining tasks to low-stress employees
+→ Use greedy load balancing
+
+📊 REALLOCATION RULES
+
+When stress >= HIGH (7+):
+
+Fetch all active tasks of employee
+
+If task_count ≤ 1 → stop
+
+If task_count > 1 → reassign extra tasks
+
+Eligible receiving employee:
+
+stress < 7
+
+least number of tasks
+
+not same employee
+
+active status
+
+Sort by:
+lowest stress → least tasks
+
+🔔 NOTIFICATION SYSTEM (IMPORTANT)
+
+If reassignment happens, send notifications.
+
+Sender (Bob Smith):
+
+"Your task has been reassigned to [Employee Name] due to high stress workload balancing."
+
+Receiver:
+
+"You have received an additional task reassigned from Bob Smith."
+
+Conditions:
+
+Notify ONLY if reassignment actually happened
+
+No reassignment → no notification
+
+No duplicate notifications
+
+🗄️ CREATE NOTIFICATION TABLE
+
+If not exists, create:
+
+notifications
+--------------
+id (PK)
+employee_id
+message
+timestamp
+read_status (default false)
+💻 BACKEND FLOW
+for each employee:
+
+  if stress not updated today:
+      skip
+
+  if stress < HIGH:
+      skip
+
+  tasks = active tasks
+  if len(tasks) <= 1:
+      continue
+
+  extra_tasks = tasks[1:]
+
+  for each task in extra_tasks:
+
+      find low stress employee
+
+      if found:
+          reassign task
+
+          create notification for sender
+          create notification for receiver
+
+          log reallocation
+🛡️ SAFETY CONDITIONS
+
+Replit must ensure:
+
+No login changes
+
+No crash if no employee available
+
+No duplicate task movement
+
+No duplicate notifications
+
+Use database transaction (commit only after success)
+
+Maintain task consistency
+
+Run safely daily
+
+🧪 TEST SCENARIOS
+
+Test 1
+Bob stress high + 3 tasks
+→ 2 reassigned
+→ both employees notified
+
+Test 2
+Bob stress high + 1 simple task
+→ no reassignment
+→ no notification
+
+Test 3
+No low-stress employee
+→ keep tasks
+→ no crash
+
+Test 4
+Admin dashboard
+→ shows reallocation log
+
+🧠 FINAL COMMAND FOR REPLIT AI
+
+Implement automatic stress-based task reallocation with greedy load balancing and real-time notification system for both sender and receiver employees, ensuring safe database transactions and no impact to login or existing features.

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useUser } from "@/hooks/use-auth";
 import { useTasks, useCompleteTask } from "@/hooks/use-tasks";
 import { useStressHistory } from "@/hooks/use-stress";
@@ -6,14 +6,12 @@ import { StressBadge } from "@/components/StressBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, LifeBuoy, Zap, Brain } from "lucide-react";
-import { format } from "date-fns";
+import { Bell, CheckCircle2, Circle, Clock, TrendingUp, AlertCircle, LifeBuoy, Zap, Brain } from "lucide-react";
+import { format, isToday } from "date-fns";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { AIWellnessChat } from "@/components/AIWellnessChat";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
 import { Link } from "wouter";
 
 export default function EmployeeDashboard() {
@@ -22,15 +20,20 @@ export default function EmployeeDashboard() {
   const { mutate: completeTask } = useCompleteTask();
   const { data: stressHistory, refetch: refetchStress, isLoading: stressLoading } = useStressHistory(user?.id || 0);
 
+  const { data: notifications } = useQuery<any[]>({
+    queryKey: ["/api/notifications"],
+    enabled: !!user?.id
+  });
+
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Force a refresh when dashboard mounts to catch latest wellness data
     if (user?.id) {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", user.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/stress/history", user.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     }
   }, [user?.id, queryClient]);
 
@@ -55,10 +58,50 @@ export default function EmployeeDashboard() {
 
   if (!user) return null;
 
-  const isBurnoutRisk = (user.currentStress || 0) >= 4;
+  const updatedToday = stressHistory?.some(log => isToday(new Date(log.date || log.loggedAt || "")));
+  const isBurnoutRisk = (user.currentStress || 0) >= 25;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-4 pb-12">
+      {/* Notifications Tray */}
+      {notifications && notifications.length > 0 && (
+        <div className="space-y-3 pt-4">
+          {notifications.slice(0, 3).map((notif, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-2xl flex items-center gap-3"
+            >
+              <Bell className="w-5 h-5 text-yellow-600 shrink-0" />
+              <p className="text-sm font-medium text-yellow-800">{notif.message}</p>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Daily Reminder */}
+      {!updatedToday && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-amber-50 border border-amber-200 p-6 rounded-3xl shadow-sm flex items-center justify-between mt-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center text-white">
+              <Brain className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900">Daily Wellness Check-in</h3>
+              <p className="text-sm text-amber-700">You haven't updated your stress levels today. Please take a moment to check in.</p>
+            </div>
+          </div>
+          <Link href="/wellness">
+            <Button className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold">Start Now</Button>
+          </Link>
+        </motion.div>
+      )}
+
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pt-4">
         <motion.div 
@@ -117,7 +160,7 @@ export default function EmployeeDashboard() {
               <div>
                 <h3 className="font-black text-red-900 leading-tight">Burnout Risk Detected ⚠</h3>
                 <p className="text-xs text-red-700 mt-1 font-medium leading-relaxed">
-                  Consistent high stress levels detected over 3 days. Admin has been alerted to provide support.
+                  Consistent high stress levels detected. Admin has been alerted to provide support.
                 </p>
               </div>
             </motion.div>
@@ -151,14 +194,14 @@ export default function EmployeeDashboard() {
                         dataKey="date" 
                         hide 
                       />
-                      <YAxis domain={[0, 6]} hide />
+                      <YAxis domain={[0, 40]} hide />
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
                         labelFormatter={(label) => format(new Date(label), 'EEEE, MMM d')}
                       />
                       <Area 
                         type="monotone" 
-                        dataKey="stressLevel" 
+                        dataKey="totalScore" 
                         stroke="#eab308" 
                         strokeWidth={4}
                         fillOpacity={1} 
@@ -188,9 +231,9 @@ export default function EmployeeDashboard() {
                <CardContent className="space-y-4 pt-2">
                   <div className="bg-white/20 backdrop-blur-md p-4 rounded-3xl border border-white/20">
                      <p className="text-sm font-bold leading-relaxed">
-                        {user.currentStress >= 4 
+                        {user.currentStress >= 25 
                           ? "We've notified the team to handle heavy tasks. Please prioritize resting today. 🛌"
-                          : user.currentStress >= 3 
+                          : user.currentStress >= 7 
                             ? "Try a 10-minute walk outside to refresh your focus. 🚶‍♂️"
                             : "You're in a great state! A good time to tackle complex problems. 🚀"}
                      </p>

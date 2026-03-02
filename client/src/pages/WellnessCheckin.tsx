@@ -104,7 +104,7 @@ export default function WellnessCheckin() {
               <p className="text-gray-500 font-medium">Your wellness data has been updated and AI reallocation (if needed) has been processed.</p>
             </div>
             <Button 
-              onClick={() => setLocation("/")}
+              onClick={() => setLocation("/dashboard")}
               className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-6 rounded-2xl shadow-lg"
             >
               Return to Dashboard
