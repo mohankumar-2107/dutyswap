@@ -54,6 +54,13 @@ export async function registerRoutes(
       if (user) return res.json(user);
     }
 
+    // Check query params as well for redirects
+    const queryId = req.query.employeeId;
+    if (queryId && !isNaN(Number(queryId))) {
+      const user = await storage.getEmployee(Number(queryId));
+      if (user) return res.json(user);
+    }
+
     res.json(null);
   });
 

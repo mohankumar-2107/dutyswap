@@ -30,7 +30,7 @@ function ProtectedRoute({ component: Component, allowedRole }: { component: any,
   if (!user) {
     // Redirect to login if not authenticated
     // We use a small timeout to avoid immediate redirect loops during hydration
-    if (window.location.pathname !== '/') {
+    if (window.location.pathname !== "/") {
       setTimeout(() => setLocation("/"), 0);
     }
     return null;

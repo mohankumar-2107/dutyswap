@@ -1,17 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type InsertEmployee } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 
 // Auth is special - we handle "me" query manually to track login state
 export function useUser() {
   const query = useQuery({
     queryKey: [api.auth.me.path],
     queryFn: async () => {
-      const res = await fetch(api.auth.me.path);
-      if (res.status === 401) return null;
-      if (!res.ok) throw new Error("Failed to fetch user");
-      return await res.json();
+      try {
+        const res = await apiRequest("GET", api.auth.me.path);
+        return await res.json();
+      } catch (e) {
+        return null;
+      }
     },
     retry: false,
+    staleTime: 0,
   });
   return query;
 }
