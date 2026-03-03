@@ -1,0 +1,151 @@
+Do NOT modify existing login system.
+Do NOT change stress scale logic.
+Do NOT replace previous automatic reallocation logic.
+
+Keep stress classification exactly as:
+
+1–2 → Low
+
+3 → Medium
+
+4–5 → High
+
+Do NOT use weighted scoring up to 40.
+Revert to simple 1–5 threshold logic.
+
+✅ FEATURE TO ADD: PEER ASSISTANCE MODULE (NOT SOS)
+
+Add a controlled help-request feature inside Employee Dashboard.
+
+This must NOT interfere with automatic stress-based reallocation.
+
+🎯 FUNCTIONAL REQUIREMENTS
+1️⃣ Add Button in Employee Dashboard
+
+Add button:
+
+"Request Peer Assistance"
+
+When clicked:
+
+System fetches eligible employees where:
+
+stress ≤ 3 (Low or Medium)
+
+active status
+
+not same employee
+
+minimal task load (0 or least tasks)
+
+Sort by:
+
+Lowest stress
+
+Least tasks
+
+Display selectable list.
+
+2️⃣ When Employee Selects Helper
+
+Create new database table if not exists:
+
+help_requests
+--------------
+id (primary key)
+requester_id
+helper_id
+status (pending / accepted / rejected)
+timestamp
+
+Insert record with:
+status = "pending"
+
+3️⃣ Helper Dashboard Notification
+
+When helper logs in or refreshes dashboard, show:
+
+"[Requester Name] has requested your assistance."
+
+Display:
+[Accept] [Reject]
+
+4️⃣ If Helper Accepts
+
+Update help_requests status = accepted
+
+Send notification to requester:
+
+"[Helper Name] has accepted your help request."
+
+Optionally mark both users as "collaborating"
+
+5️⃣ If Helper Rejects
+
+Update status = rejected
+
+Notify requester:
+
+"[Helper Name] declined your help request."
+
+🔔 NOTIFICATION SYSTEM
+
+Create notifications table if not exists:
+
+notifications
+--------------
+id
+employee_id
+message
+timestamp
+read_status (default false)
+
+Notifications must:
+
+Be created only on actual events
+
+Not duplicate
+
+Be visible in dashboard
+
+Be timestamped
+
+⚠️ IMPORTANT CONDITIONS
+
+Do NOT change automatic stress-based reallocation logic
+
+Do NOT modify stress scale (must remain 1–5)
+
+Do NOT break login or session system
+
+Do NOT auto-assign tasks during help request
+
+This is only a collaboration request system
+
+All DB operations must be transactional
+
+No duplicate help requests between same users while pending
+
+🧪 TEST CASES
+
+Test 1:
+Employee stress = 3
+Clicks request
+System shows eligible helpers
+
+Test 2:
+Helper accepts
+Requester receives acceptance notification
+
+Test 3:
+Helper rejects
+Requester receives rejection notification
+
+Test 4:
+Existing stress-based auto reallocation still works normally
+
+🎯 FINAL GOAL
+
+Maintain original 1–5 stress logic.
+Keep automatic reallocation untouched.
+Add a safe, clean, collaborative Peer Assistance Module with notification handling and dashboard integration.

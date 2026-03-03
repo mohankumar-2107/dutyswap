@@ -1,15 +1,16 @@
 
 import { db } from "./db";
 import {
-  employees, tasks, stressLogs, dutyLogs, messages, notifications,
+  employees, tasks, stressLogs, dutyLogs, messages, notifications, helpRequests,
   type Employee, type InsertEmployee,
   type Task, type InsertTask,
   type StressLog, type InsertStressLog,
   type DutyLog,
   type Message, type InsertMessage,
-  type Notification, type InsertNotification
+  type Notification, type InsertNotification,
+  type HelpRequest, type InsertHelpRequest
 } from "@shared/schema";
-import { eq, desc, sql, and, ne, lt } from "drizzle-orm";
+import { eq, desc, sql, and, ne, lt, or } from "drizzle-orm";
 
 export interface IStorage {
   getEmployees(): Promise<Employee[]>;
@@ -38,6 +39,10 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   getNotifications(employeeId: number): Promise<Notification[]>;
 
+  createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest>;
+  updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest>;
+  getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]>;
+
   getAdminStats(): Promise<{
     totalEmployees: number;
     lowStress: number;
@@ -46,6 +51,37 @@ export interface IStorage {
     reassignedTasks: number;
   }>;
 }
+
+export class DatabaseStorage implements IStorage {
+  // ... existing methods ...
+  async getLowStressEmployees(excludeId: number): Promise<Employee[]> {
+    return await db.select().from(employees).where(and(
+        sql`${employees.currentStress} <= 3`,
+        sql`${employees.id} != ${excludeId}`,
+        eq(employees.role, 'employee')
+    ));
+  }
+
+  async createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest> {
+    const [row] = await db.insert(helpRequests).values(req).returning();
+    return row;
+  }
+
+  async updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest> {
+    const [updated] = await db.update(helpRequests).set({ status }).where(eq(helpRequests.id, id)).returning();
+    return updated;
+  }
+
+  async getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]> {
+    return await db.query.helpRequests.findMany({
+      where: or(eq(helpRequests.requesterId, employeeId), eq(helpRequests.helperId, employeeId)),
+      with: {
+        requester: true,
+        helper: true,
+      },
+      orderBy: desc(helpRequests.timestamp),
+    }) as any;
+  }
 
 export class DatabaseStorage implements IStorage {
   async getEmployees(): Promise<Employee[]> {

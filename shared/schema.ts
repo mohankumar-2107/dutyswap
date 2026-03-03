@@ -137,5 +137,26 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 }));
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, timestamp: true, readStatus: true });
-export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export const helpRequests = pgTable("help_requests", {
+  id: serial("id").primaryKey(),
+  requesterId: integer("requester_id").notNull().references(() => employees.id),
+  helperId: integer("helper_id").notNull().references(() => employees.id),
+  status: text("status").notNull().default("pending"), // 'pending', 'accepted', 'rejected'
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const helpRequestsRelations = relations(helpRequests, ({ one }) => ({
+  requester: one(employees, {
+    fields: [helpRequests.requesterId],
+    references: [employees.id],
+    relationName: "requestsSent",
+  }),
+  helper: one(employees, {
+    fields: [helpRequests.helperId],
+    references: [employees.id],
+    relationName: "requestsReceived",
+  }),
+}));
+
+export type HelpRequest = typeof helpRequests.$inferSelect;
+export type InsertHelpRequest = z.infer<typeof createInsertSchema(helpRequests).omit({ id: true, timestamp: true })>;
