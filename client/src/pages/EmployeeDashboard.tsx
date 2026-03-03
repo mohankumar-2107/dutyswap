@@ -34,8 +34,39 @@ export default function EmployeeDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/stress/history", user.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/help-requests"] });
     }
   }, [user?.id, queryClient]);
+
+  const { data: helpRequests, isLoading: helpLoading } = useQuery<any[]>({
+    queryKey: ["/api/help-requests"],
+    enabled: !!user?.id
+  });
+
+  const { data: eligibleHelpers } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+    select: (emps) => emps.filter((e: any) => e.role === 'employee' && e.id !== user.id && (e.currentStress || 0) <= 3)
+  });
+
+  const helpRequestMutation = useMutation({
+    mutationFn: async (helperId: number) => {
+      return apiRequest("POST", "/api/help-requests", { helperId });
+    },
+    onSuccess: () => {
+      toast({ title: "Request Sent", description: "Assistance request sent to peer." });
+      queryClient.invalidateQueries({ queryKey: ["/api/help-requests"] });
+    }
+  });
+
+  const respondHelpMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number, status: string }) => {
+      return apiRequest("PATCH", `/api/help-requests/${id}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/help-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    }
+  });
 
   const { toast } = useToast();
 
@@ -59,7 +90,7 @@ export default function EmployeeDashboard() {
   if (!user) return null;
 
   const updatedToday = stressHistory?.some(log => isToday(new Date(log.date || log.loggedAt || "")));
-  const isBurnoutRisk = (user.currentStress || 0) >= 25;
+  const isBurnoutRisk = (user.currentStress || 0) >= 4;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-4 pb-12">
@@ -143,10 +174,73 @@ export default function EmployeeDashboard() {
         {/* Left Col: Chat Interface */}
         <div className="lg:col-span-4 space-y-6">
           <Link href="/wellness">
-            <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-8 py-6 rounded-2xl shadow-xl hover:scale-105 transition-transform font-bold text-lg">
+            <Button className="bg-yellow-500 hover:bg-yellow-600 text-white px-8 py-6 rounded-2xl shadow-xl hover:scale-105 transition-transform font-bold text-lg w-full">
               Update Stress Status
             </Button>
           </Link>
+
+          <Card className="glass-card border-none shadow-xl rounded-3xl p-6">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <LifeBuoy className="w-5 h-5 text-yellow-500" />
+                Peer Assistance
+              </CardTitle>
+              <CardDescription>Request help from low-stress colleagues</CardDescription>
+            </CardHeader>
+            <CardContent className="px-0 space-y-4">
+              {eligibleHelpers && eligibleHelpers.length > 0 ? (
+                <div className="space-y-2">
+                  {eligibleHelpers.map((helper: any) => (
+                    <div key={helper.id} className="flex items-center justify-between p-3 bg-yellow-50/50 rounded-2xl border border-yellow-100">
+                      <div>
+                        <p className="font-bold text-sm">{helper.name}</p>
+                        <p className="text-[10px] text-gray-500">Stress: {helper.currentStress}/5</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-yellow-600 font-bold hover:bg-yellow-100"
+                        onClick={() => helpRequestMutation.mutate(helper.id)}
+                        disabled={helpRequestMutation.isPending}
+                      >
+                        Request
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No eligible helpers available right now.</p>
+              )}
+
+              {helpRequests && helpRequests.some(r => r.helperId === user.id && r.status === 'pending') && (
+                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-400">Incoming Requests</p>
+                  {helpRequests.filter(r => r.helperId === user.id && r.status === 'pending').map((req: any) => (
+                    <div key={req.id} className="bg-yellow-400/10 p-4 rounded-2xl border border-yellow-200">
+                      <p className="text-sm font-bold mb-3">{req.requester?.name} has requested your assistance.</p>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl flex-1 font-bold"
+                          onClick={() => respondHelpMutation.mutate({ id: req.id, status: 'accepted' })}
+                        >
+                          Accept
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="rounded-xl flex-1 font-bold"
+                          onClick={() => respondHelpMutation.mutate({ id: req.id, status: 'rejected' })}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           
           {isBurnoutRisk && (
             <motion.div
@@ -194,14 +288,14 @@ export default function EmployeeDashboard() {
                         dataKey="date" 
                         hide 
                       />
-                      <YAxis domain={[0, 40]} hide />
+                      <YAxis domain={[0, 5]} hide />
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
                         labelFormatter={(label) => format(new Date(label), 'EEEE, MMM d')}
                       />
                       <Area 
                         type="monotone" 
-                        dataKey="totalScore" 
+                        dataKey="stressLevel" 
                         stroke="#eab308" 
                         strokeWidth={4}
                         fillOpacity={1} 
@@ -231,9 +325,9 @@ export default function EmployeeDashboard() {
                <CardContent className="space-y-4 pt-2">
                   <div className="bg-white/20 backdrop-blur-md p-4 rounded-3xl border border-white/20">
                      <p className="text-sm font-bold leading-relaxed">
-                        {user.currentStress >= 25 
+                        {user.currentStress >= 4 
                           ? "We've notified the team to handle heavy tasks. Please prioritize resting today. 🛌"
-                          : user.currentStress >= 7 
+                          : user.currentStress === 3 
                             ? "Try a 10-minute walk outside to refresh your focus. 🚶‍♂️"
                             : "You're in a great state! A good time to tackle complex problems. 🚀"}
                      </p>

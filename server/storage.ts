@@ -1,4 +1,3 @@
-
 import { db } from "./db";
 import {
   employees, tasks, stressLogs, dutyLogs, messages, notifications, helpRequests,
@@ -53,37 +52,6 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // ... existing methods ...
-  async getLowStressEmployees(excludeId: number): Promise<Employee[]> {
-    return await db.select().from(employees).where(and(
-        sql`${employees.currentStress} <= 3`,
-        sql`${employees.id} != ${excludeId}`,
-        eq(employees.role, 'employee')
-    ));
-  }
-
-  async createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest> {
-    const [row] = await db.insert(helpRequests).values(req).returning();
-    return row;
-  }
-
-  async updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest> {
-    const [updated] = await db.update(helpRequests).set({ status }).where(eq(helpRequests.id, id)).returning();
-    return updated;
-  }
-
-  async getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]> {
-    return await db.query.helpRequests.findMany({
-      where: or(eq(helpRequests.requesterId, employeeId), eq(helpRequests.helperId, employeeId)),
-      with: {
-        requester: true,
-        helper: true,
-      },
-      orderBy: desc(helpRequests.timestamp),
-    }) as any;
-  }
-
-export class DatabaseStorage implements IStorage {
   async getEmployees(): Promise<Employee[]> {
     return await db.select().from(employees);
   }
@@ -114,7 +82,7 @@ export class DatabaseStorage implements IStorage {
 
   async getLowStressEmployees(excludeId: number): Promise<Employee[]> {
     return await db.select().from(employees).where(and(
-        sql`${employees.currentStress} < 7`,
+        sql`${employees.currentStress} <= 3`,
         sql`${employees.id} != ${excludeId}`,
         eq(employees.role, 'employee')
     ));
@@ -234,6 +202,27 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(notifications).where(eq(notifications.employeeId, employeeId)).orderBy(desc(notifications.timestamp));
   }
 
+  async createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest> {
+    const [row] = await db.insert(helpRequests).values(req).returning();
+    return row;
+  }
+
+  async updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest> {
+    const [updated] = await db.update(helpRequests).set({ status }).where(eq(helpRequests.id, id)).returning();
+    return updated;
+  }
+
+  async getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]> {
+    return await db.query.helpRequests.findMany({
+      where: or(eq(helpRequests.requesterId, employeeId), eq(helpRequests.helperId, employeeId)),
+      with: {
+        requester: true,
+        helper: true,
+      },
+      orderBy: desc(helpRequests.timestamp),
+    }) as any;
+  }
+
   async getAdminStats(): Promise<{
     totalEmployees: number;
     lowStress: number;
@@ -242,9 +231,9 @@ export class DatabaseStorage implements IStorage {
     reassignedTasks: number;
   }> {
     const allEmployees = await db.select().from(employees);
-    const low = allEmployees.filter(e => (e.currentStress || 0) < 7 && e.role === 'employee').length;
-    const medium = allEmployees.filter(e => (e.currentStress || 0) >= 7 && (e.currentStress || 0) < 25 && e.role === 'employee').length;
-    const high = allEmployees.filter(e => (e.currentStress || 0) >= 25 && e.role === 'employee').length;
+    const low = allEmployees.filter(e => (e.currentStress || 0) <= 2 && e.role === 'employee').length;
+    const medium = allEmployees.filter(e => (e.currentStress || 0) === 3 && e.role === 'employee').length;
+    const high = allEmployees.filter(e => (e.currentStress || 0) >= 4 && e.role === 'employee').length;
     const total = allEmployees.filter(e => e.role === 'employee').length;
     const logsCount = (await db.select().from(dutyLogs)).length;
     

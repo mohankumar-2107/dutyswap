@@ -29,9 +29,8 @@ function ProtectedRoute({ component: Component, allowedRole }: { component: any,
 
   if (!user) {
     // Redirect to login if not authenticated
-    // We use a small timeout to avoid immediate redirect loops during hydration
     if (window.location.pathname !== "/") {
-      return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+      setLocation("/");
     }
     return null;
   }

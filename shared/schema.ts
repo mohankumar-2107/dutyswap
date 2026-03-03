@@ -159,4 +159,5 @@ export const helpRequestsRelations = relations(helpRequests, ({ one }) => ({
 }));
 
 export type HelpRequest = typeof helpRequests.$inferSelect;
-export type InsertHelpRequest = z.infer<typeof createInsertSchema(helpRequests).omit({ id: true, timestamp: true })>;
+export const insertHelpRequestSchema = createInsertSchema(helpRequests).omit({ id: true, timestamp: true });
+export type InsertHelpRequest = z.infer<typeof insertHelpRequestSchema>;

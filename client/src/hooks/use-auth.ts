@@ -57,6 +57,7 @@ export function useLogout() {
     onSuccess: () => {
       queryClient.setQueryData([api.auth.me.path], null);
       queryClient.invalidateQueries();
+      window.location.href = "/";
     },
   });
 }

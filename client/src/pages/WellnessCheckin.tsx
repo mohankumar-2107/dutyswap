@@ -45,6 +45,8 @@ export default function WellnessCheckin() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stress/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/help-requests"] });
       
       toast({
         title: "Check-in Complete",
@@ -203,10 +205,10 @@ export default function WellnessCheckin() {
                       <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
                         <h4 className="text-xs font-black text-blue-900 uppercase mb-1">Algorithm & ML info</h4>
                         <p className="text-[10px] text-blue-700 leading-tight">
-                          Uses a <strong>Rule-based Scoring Algorithm</strong>. Each response is weighted (1-4). 
-                          The <strong>Classification Logic</strong> maps the total score (10-40) to stress tiers: 
-                          Low (10-15), Medium (16-25), High (26-40). 
-                          Reallocation uses a <strong>Greedy Load-Balancing Algorithm</strong> to find employees with the lowest stress scores.
+                          Each response is weighted (1-4). 
+                          The <strong>Classification Logic</strong> maps the total score (10-40) to stress levels: 
+                          Low (1-2), Medium (3), High (4-5). 
+                          Reallocation uses a <strong>Greedy Load-Balancing Algorithm</strong> to find employees with the lowest stress levels.
                         </p>
                       </div>
                     </div>
