@@ -40,7 +40,8 @@ export default function EmployeeDashboard() {
 
   const { data: helpRequests, isLoading: helpLoading } = useQuery<any[]>({
     queryKey: ["/api/help-requests"],
-    enabled: !!user?.id
+    enabled: !!user?.id,
+    refetchInterval: 5000 // Poll for new help requests
   });
 
   const { data: eligibleHelpers } = useQuery<any[]>({
@@ -223,6 +224,7 @@ export default function EmployeeDashboard() {
                           size="sm" 
                           className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl flex-1 font-bold"
                           onClick={() => respondHelpMutation.mutate({ id: req.id, status: 'accepted' })}
+                          disabled={respondHelpMutation.isPending}
                         >
                           Accept
                         </Button>
@@ -231,6 +233,7 @@ export default function EmployeeDashboard() {
                           variant="outline" 
                           className="rounded-xl flex-1 font-bold"
                           onClick={() => respondHelpMutation.mutate({ id: req.id, status: 'rejected' })}
+                          disabled={respondHelpMutation.isPending}
                         >
                           Decline
                         </Button>

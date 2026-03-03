@@ -19,6 +19,12 @@ function ProtectedRoute({ component: Component, allowedRole }: { component: any,
   const { data: user, isLoading } = useUser();
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    if (!isLoading && !user && window.location.pathname !== "/") {
+      setLocation("/");
+    }
+  }, [isLoading, user, setLocation]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -27,11 +33,7 @@ function ProtectedRoute({ component: Component, allowedRole }: { component: any,
     );
   }
 
-  if (!user) {
-    // Redirect to login if not authenticated
-    if (window.location.pathname !== "/") {
-      setLocation("/");
-    }
+  if (!user && window.location.pathname !== "/") {
     return null;
   }
 

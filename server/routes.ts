@@ -147,11 +147,11 @@ export async function registerRoutes(
   });
 
   // === STRESS & AI CHAT LOGIC ===
-  app.post(api.stress.log.path, async (req, res) => {
+  app.post("/api/stress", async (req, res) => {
     try {
-      const input = api.stress.log.input.parse(req.body);
-      
+      const input = req.body;
       const rawScore = input.totalScore || 0;
+      
       // Revert to 1-5 scale: 10-15 (1), 16-25 (3), 26-40 (5)
       let calculatedLevel = 1;
       if (rawScore >= 26) calculatedLevel = 5;
@@ -173,9 +173,11 @@ export async function registerRoutes(
       // AI REALLOCATION LOGIC (Greedy Load Balancing)
       if (calculatedLevel >= 4) {
           const pendingTasks = await storage.getPendingTasksForEmployee(input.employeeId);
+          console.log(`[AI] Checking reallocation for ${employee.name}. Pending tasks: ${pendingTasks.length}`);
           
           if (pendingTasks.length > 1) {
               const candidates = await storage.getLowStressEmployees(input.employeeId);
+              console.log(`[AI] Found ${candidates.length} potential candidates.`);
               
               if (candidates.length > 0) {
                   // Greedy load balancing: Sort by (currentStress ASC, taskCount ASC)
@@ -193,6 +195,7 @@ export async function registerRoutes(
                   
                   const targetEmployee = candidatesWithLoad[0].employee;
                   const extraTasks = pendingTasks.slice(1);
+                  console.log(`[AI] Reallocating ${extraTasks.length} tasks to ${targetEmployee.name}`);
                   
                   for (const taskToMove of extraTasks) {
                     await storage.reassignTask(taskToMove.id, targetEmployee.id);
