@@ -242,7 +242,6 @@ Future Improvements
 
 Possible enhancements include:
 
-- GB 
 
 Machine learning based stress prediction
 Stress trend analysis over time
@@ -250,3 +249,5 @@ Email or Slack notifications
 Team stress heatmaps
 Advanced task prioritization models
 Predictive workload balancing
+
+-GB
