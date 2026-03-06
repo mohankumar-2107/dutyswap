@@ -67,27 +67,40 @@ export default function WellnessCheckin() {
   };
 
   const handleSubmit = () => {
-    if (answers.length < QUESTIONS.length || answers.includes(undefined as any)) {
-      toast({
-        title: "Incomplete",
-        description: "Please answer all questions before submitting.",
-        variant: "destructive"
-      });
-      return;
-    }
 
-    const totalScore = answers.reduce((a, b) => a + (b || 0), 0);
-    console.log("Submitting wellness check-in:", { employeeId: user?.id, totalScore, answers });
-    
-    // Ensure we have a valid employee ID before mutating
-    const empId = user?.id || Number(localStorage.getItem("last_employee_id"));
-    
-    stressMutation.mutate({
-      employeeId: Number(empId),
-      totalScore,
-      answers
+  if (!user?.id) {
+    toast({
+      title: "User not loaded",
+      description: "Please wait a moment and try again.",
+      variant: "destructive"
     });
-  };
+    return;
+  }
+
+  if (answers.length < QUESTIONS.length || answers.includes(undefined as any)) {
+    toast({
+      title: "Incomplete",
+      description: "Please answer all questions before submitting.",
+      variant: "destructive"
+    });
+    return;
+  }
+
+  const totalScore = answers.reduce((a, b) => a + (b || 0), 0);
+
+  console.log("Submitting wellness check-in:", {
+    employeeId: user.id,
+    totalScore,
+    answers
+  });
+
+  stressMutation.mutate({
+    employeeId: user.id,
+    totalScore: totalScore,
+    answers: answers
+  });
+
+};
 
   if (isFinished) {
     return (

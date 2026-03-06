@@ -1,95 +1,86 @@
 import { db } from "./db";
+
 import {
-  employees, tasks, stressLogs, dutyLogs, messages, notifications, helpRequests,
-  type Employee, type InsertEmployee,
-  type Task, type InsertTask,
-  type StressLog, type InsertStressLog,
+  employees,
+  tasks,
+  stressLogs,
+  dutyLogs,
+  messages,
+  notifications,
+  helpRequests,
+  type Employee,
+  type InsertEmployee,
+  type Task,
+  type InsertTask,
+  type StressLog,
+  type InsertStressLog,
   type DutyLog,
-  type Message, type InsertMessage,
-  type Notification, type InsertNotification,
-  type HelpRequest, type InsertHelpRequest
+  type Message,
+  type InsertMessage,
+  type Notification,
+  type InsertNotification,
+  type HelpRequest,
+  type InsertHelpRequest
 } from "@shared/schema";
-import { eq, desc, sql, and, ne, lt, or } from "drizzle-orm";
 
-export interface IStorage {
-  getEmployees(): Promise<Employee[]>;
-  getEmployee(id: number): Promise<Employee | undefined>;
-  getEmployeeByUsername(username: string): Promise<Employee | undefined>;
-  createEmployee(employee: InsertEmployee): Promise<Employee>;
-  updateEmployeeStress(id: number, stress: number): Promise<Employee>;
-  getLowStressEmployees(excludeId: number): Promise<Employee[]>;
+import { eq, desc, and, ne, or, lte } from "drizzle-orm";
 
-  getTasks(employeeId?: number): Promise<(Task & { assignee: Employee | null })[]>;
-  getTask(id: number): Promise<Task | undefined>;
-  getPendingTasksForEmployee(employeeId: number): Promise<Task[]>;
-  createTask(task: InsertTask): Promise<Task>;
-  updateTaskStatus(id: number, status: string): Promise<Task>;
-  reassignTask(taskId: number, newAssigneeId: number): Promise<Task>;
+export class DatabaseStorage {
 
-  logStress(log: InsertStressLog): Promise<StressLog>;
-  getStressLogs(employeeId: number): Promise<StressLog[]>;
+  // =========================
+  // EMPLOYEES
+  // =========================
 
-  logDutyReallocation(taskId: number, fromId: number, toId: number, reason?: string): Promise<DutyLog>;
-  getDutyLogs(): Promise<(DutyLog & { task: Task | null, fromEmployee: Employee | null, toEmployee: Employee | null })[]>;
-
-  createMessage(message: InsertMessage): Promise<Message>;
-  getMessages(): Promise<(Message & { employee: Employee | null })[]>;
-
-  createNotification(notification: InsertNotification): Promise<Notification>;
-  getNotifications(employeeId: number): Promise<Notification[]>;
-
-  createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest>;
-  updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest>;
-  getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]>;
-
-  getAdminStats(): Promise<{
-    totalEmployees: number;
-    lowStress: number;
-    mediumStress: number;
-    highStress: number;
-    reassignedTasks: number;
-  }>;
-}
-
-export class DatabaseStorage implements IStorage {
   async getEmployees(): Promise<Employee[]> {
-    return await db.select().from(employees);
+    return db.select().from(employees);
   }
 
   async getEmployee(id: number): Promise<Employee | undefined> {
-    const [employee] = await db.select().from(employees).where(eq(employees.id, id));
-    return employee;
+    const [row] = await db.select().from(employees).where(eq(employees.id, id));
+    return row;
   }
 
   async getEmployeeByUsername(username: string): Promise<Employee | undefined> {
-    const [employee] = await db.select().from(employees).where(eq(employees.username, username));
-    return employee;
+    const [row] = await db.select().from(employees).where(eq(employees.username, username));
+    return row;
   }
 
-  async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values(insertEmployee).returning();
-    return employee;
+  async createEmployee(data: InsertEmployee): Promise<Employee> {
+    const [row] = await db.insert(employees).values(data).returning();
+    return row;
   }
 
   async updateEmployeeStress(id: number, stress: number): Promise<Employee> {
-    const [updated] = await db
+    const [row] = await db
       .update(employees)
       .set({ currentStress: stress })
       .where(eq(employees.id, id))
       .returning();
-    return updated;
+
+    return row;
   }
 
   async getLowStressEmployees(excludeId: number): Promise<Employee[]> {
-    return await db.select().from(employees).where(and(
-        sql`${employees.currentStress} <= 3`,
-        sql`${employees.id} != ${excludeId}`,
-        eq(employees.role, 'employee')
-    ));
+    return db
+      .select()
+      .from(employees)
+      .where(
+        and(
+          ne(employees.id, excludeId),
+          eq(employees.role, "employee"),
+          lte(employees.currentStress, 3)
+        )
+      );
   }
 
+  // =========================
+  // TASKS
+  // =========================
+
   async getTasks(employeeId?: number): Promise<(Task & { assignee: Employee | null })[]> {
-    const query = db.select({
+
+    const baseQuery = db
+      .select({
         id: tasks.id,
         title: tasks.title,
         assignedToId: tasks.assignedToId,
@@ -97,154 +88,242 @@ export class DatabaseStorage implements IStorage {
         status: tasks.status,
         createdAt: tasks.createdAt,
         assignee: employees
-    })
-    .from(tasks)
-    .leftJoin(employees, eq(tasks.assignedToId, employees.id));
+      })
+      .from(tasks)
+      .leftJoin(employees, eq(tasks.assignedToId, employees.id));
 
     if (employeeId) {
-      query.where(eq(tasks.assignedToId, employeeId));
+      return baseQuery.where(eq(tasks.assignedToId, employeeId));
     }
 
-    return await query;
+    return baseQuery;
   }
 
   async getTask(id: number): Promise<Task | undefined> {
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
-    return task;
-  }
-
-  async getPendingTasksForEmployee(employeeId: number): Promise<Task[]> {
-    return await db.select().from(tasks).where(and(
-        eq(tasks.assignedToId, employeeId),
-        eq(tasks.status, 'Pending')
-    ));
-  }
-
-  async createTask(insertTask: InsertTask): Promise<Task> {
-    const [task] = await db.insert(tasks).values(insertTask).returning();
-    return task;
-  }
-
-  async updateTaskStatus(id: number, status: string): Promise<Task> {
-    const [updated] = await db.update(tasks).set({ status }).where(eq(tasks.id, id)).returning();
-    return updated;
-  }
-
-  async reassignTask(taskId: number, newAssigneeId: number): Promise<Task> {
-    const [updated] = await db.update(tasks).set({ assignedToId: newAssigneeId }).where(eq(tasks.id, taskId)).returning();
-    return updated;
-  }
-
-  async logStress(insertLog: InsertStressLog): Promise<StressLog> {
-    console.log(`[STORAGE] Logging stress for employee ${insertLog.employeeId}. Score: ${insertLog.totalScore}`);
-    
-    const values: any = {
-      employeeId: insertLog.employeeId,
-      stressLevel: insertLog.stressLevel,
-      totalScore: insertLog.totalScore,
-      answers: insertLog.answers,
-      date: new Date().toISOString().split('T')[0]
-    };
-    
-    try {
-      const [log] = await db.insert(stressLogs).values(values).returning();
-      console.log(`[STORAGE] Successfully logged stress. ID: ${log.id}`);
-      return log;
-    } catch (err) {
-      console.error("[STORAGE] Critical error in logStress:", err);
-      throw err;
-    }
-  }
-
-  async getStressLogs(employeeId: number): Promise<StressLog[]> {
-    return await db.select().from(stressLogs).where(eq(stressLogs.employeeId, employeeId)).orderBy(desc(stressLogs.loggedAt));
-  }
-
-  async logDutyReallocation(taskId: number, fromId: number, toId: number, reason: string): Promise<DutyLog> {
-    const [log] = await db.insert(dutyLogs).values({
-        taskId,
-        fromEmployeeId: fromId,
-        toEmployeeId: toId,
-        reason
-    }).returning();
-    return log;
-  }
-
-  async getDutyLogs(): Promise<(DutyLog & { task: Task | null, fromEmployee: Employee | null, toEmployee: Employee | null })[]> {
-    return await db.query.dutyLogs.findMany({
-        with: {
-            task: true,
-            fromEmployee: true,
-            toEmployee: true
-        },
-        orderBy: desc(dutyLogs.reallocationDate)
-    });
-  }
-
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db.insert(messages).values(insertMessage).returning();
-    return message;
-  }
-
-  async getMessages(): Promise<(Message & { employee: Employee | null })[]> {
-    return await db.query.messages.findMany({
-        with: { employee: true },
-        orderBy: desc(messages.sentAt)
-    });
-  }
-
-  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
-    const [notification] = await db.insert(notifications).values(insertNotification).returning();
-    return notification;
-  }
-
-  async getNotifications(employeeId: number): Promise<Notification[]> {
-    return await db.select().from(notifications).where(eq(notifications.employeeId, employeeId)).orderBy(desc(notifications.timestamp));
-  }
-
-  async createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest> {
-    const [row] = await db.insert(helpRequests).values(req).returning();
+    const [row] = await db.select().from(tasks).where(eq(tasks.id, id));
     return row;
   }
 
-  async updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest> {
-    const [updated] = await db.update(helpRequests).set({ status }).where(eq(helpRequests.id, id)).returning();
-    return updated;
+  async getPendingTasksForEmployee(employeeId: number): Promise<Task[]> {
+    return db.select().from(tasks).where(
+      and(
+        eq(tasks.assignedToId, employeeId),
+        eq(tasks.status, "Pending")
+      )
+    );
   }
 
-  async getHelpRequests(employeeId: number): Promise<(HelpRequest & { requester: Employee | null, helper: Employee | null })[]> {
-    return await db.query.helpRequests.findMany({
-      where: or(eq(helpRequests.requesterId, employeeId), eq(helpRequests.helperId, employeeId)),
+  async createTask(data: InsertTask): Promise<Task> {
+
+    // ensure default status
+    const values = {
+      ...data,
+      status: "Pending"
+    };
+
+    const [row] = await db.insert(tasks).values(values).returning();
+
+    return row;
+  }
+
+  async updateTaskStatus(id: number, status: string): Promise<Task> {
+
+    const [row] = await db
+      .update(tasks)
+      .set({ status })
+      .where(eq(tasks.id, id))
+      .returning();
+
+    return row;
+  }
+
+  async reassignTask(taskId: number, newAssigneeId: number): Promise<Task> {
+
+    const [row] = await db
+      .update(tasks)
+      .set({ assignedToId: newAssigneeId })
+      .where(eq(tasks.id, taskId))
+      .returning();
+
+    return row;
+  }
+
+  // =========================
+  // STRESS
+  // =========================
+
+  async logStress(log: InsertStressLog): Promise<StressLog> {
+
+    const values = {
+      employeeId: log.employeeId,
+      stressLevel: log.stressLevel,
+      totalScore: log.totalScore,
+      answers: typeof log.answers === "string"
+        ? log.answers
+        : JSON.stringify(log.answers),
+      loggedAt: Date.now(),
+      date: new Date().toISOString().split("T")[0]
+    };
+
+    const [row] = await db.insert(stressLogs).values(values).returning();
+
+    return row;
+  }
+
+  async getStressLogs(employeeId: number): Promise<StressLog[]> {
+
+    return db
+      .select()
+      .from(stressLogs)
+      .where(eq(stressLogs.employeeId, employeeId))
+      .orderBy(desc(stressLogs.loggedAt));
+
+  }
+
+  // =========================
+  // DUTY LOGS
+  // =========================
+
+  async logDutyReallocation(
+    taskId: number,
+    fromId: number,
+    toId: number,
+    reason = "Manual Admin Reallocation"
+  ): Promise<DutyLog> {
+
+    const [row] = await db.insert(dutyLogs).values({
+      taskId,
+      fromEmployeeId: fromId,
+      toEmployeeId: toId,
+      reason,
+      reallocationDate: Date.now()
+    }).returning();
+
+    return row;
+  }
+
+  async getDutyLogs() {
+
+    return db.query.dutyLogs.findMany({
+      with: {
+        task: true,
+        fromEmployee: true,
+        toEmployee: true
+      },
+      orderBy: (logs, { desc }) => [desc(logs.reallocationDate)]
+    }) as any;
+
+  }
+
+  // =========================
+  // MESSAGES
+  // =========================
+
+  async createMessage(data: InsertMessage): Promise<Message> {
+
+    const [row] = await db.insert(messages).values(data).returning();
+
+    return row;
+
+  }
+
+  async getMessages() {
+
+    return db.query.messages.findMany({
+      with: { employee: true },
+      orderBy: (msgs, { desc }) => [desc(msgs.sentAt)]
+    });
+
+  }
+
+  // =========================
+  // NOTIFICATIONS
+  // =========================
+
+  async createNotification(data: InsertNotification): Promise<Notification> {
+
+    const [row] = await db.insert(notifications).values(data).returning();
+
+    return row;
+
+  }
+
+  async getNotifications(employeeId: number): Promise<Notification[]> {
+
+    return db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.employeeId, employeeId))
+      .orderBy(desc(notifications.timestamp));
+
+  }
+
+  // =========================
+  // HELP REQUESTS
+  // =========================
+
+  async createHelpRequest(req: InsertHelpRequest): Promise<HelpRequest> {
+
+    const [row] = await db.insert(helpRequests).values(req).returning();
+
+    return row;
+
+  }
+
+  async updateHelpRequestStatus(id: number, status: string): Promise<HelpRequest> {
+
+    const [row] = await db
+      .update(helpRequests)
+      .set({ status })
+      .where(eq(helpRequests.id, id))
+      .returning();
+
+    return row;
+
+  }
+
+  async getHelpRequests(employeeId: number) {
+
+    return db.query.helpRequests.findMany({
+      where: or(
+        eq(helpRequests.requesterId, employeeId),
+        eq(helpRequests.helperId, employeeId)
+      ),
       with: {
         requester: true,
-        helper: true,
+        helper: true
       },
-      orderBy: desc(helpRequests.timestamp),
-    }) as any;
+      orderBy: (req, { desc }) => [desc(req.timestamp)]
+    });
+
   }
 
-  async getAdminStats(): Promise<{
-    totalEmployees: number;
-    lowStress: number;
-    mediumStress: number;
-    highStress: number;
-    reassignedTasks: number;
-  }> {
-    const allEmployees = await db.select().from(employees);
-    const low = allEmployees.filter(e => (e.currentStress || 0) <= 2 && e.role === 'employee').length;
-    const medium = allEmployees.filter(e => (e.currentStress || 0) === 3 && e.role === 'employee').length;
-    const high = allEmployees.filter(e => (e.currentStress || 0) >= 4 && e.role === 'employee').length;
-    const total = allEmployees.filter(e => e.role === 'employee').length;
-    const logsCount = (await db.select().from(dutyLogs)).length;
-    
+  // =========================
+  // ADMIN DASHBOARD
+  // =========================
+
+  async getAdminStats() {
+
+    const all = await db.select().from(employees);
+
+    const staff = all.filter(e => e.role === "employee");
+
+    const low = staff.filter(e => (e.currentStress ?? 0) <= 2).length;
+    const medium = staff.filter(e => (e.currentStress ?? 0) === 3).length;
+    const high = staff.filter(e => (e.currentStress ?? 0) >= 4).length;
+
+    const duty = await db.select().from(dutyLogs);
+
     return {
-        totalEmployees: total,
-        lowStress: low,
-        mediumStress: medium,
-        highStress: high,
-        reassignedTasks: logsCount
+      totalEmployees: staff.length,
+      lowStress: low,
+      mediumStress: medium,
+      highStress: high,
+      reassignedTasks: duty.length
     };
+
   }
+
 }
 
 export const storage = new DatabaseStorage();

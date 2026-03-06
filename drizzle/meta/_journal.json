@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1772683778714,
+      "tag": "0000_dry_shiver_man",
+      "breakpoints": true
+    }
+  ]
+}
