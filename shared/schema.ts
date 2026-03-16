@@ -117,7 +117,17 @@ export const helpRequests = sqliteTable("help_requests", {
 
   timestamp: integer("timestamp").default(Date.now()),
 });
+export const helpRequestsRelations = relations(helpRequests, ({ one }) => ({
+  requester: one(employees, {
+    fields: [helpRequests.requesterId],
+    references: [employees.id],
+  }),
 
+  helper: one(employees, {
+    fields: [helpRequests.helperId],
+    references: [employees.id],
+  }),
+}));
 
 
 /* ======================================================

@@ -13,10 +13,16 @@ import EmployeeDashboard from "@/pages/EmployeeDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
 import ReallocationLogs from "@/pages/ReallocationLogs";
 import NotFound from "@/pages/not-found";
-
 import WellnessCheckin from "@/pages/WellnessCheckin";
+import HelpInbox from "@/pages/HelpInbox";   // NEW IMPORT
 
-function ProtectedRoute({ component: Component, allowedRole }: { component: any, allowedRole?: 'admin' | 'employee' }) {
+function ProtectedRoute({
+  component: Component,
+  allowedRole,
+}: {
+  component: any;
+  allowedRole?: "admin" | "employee";
+}) {
   const { data: user, isLoading } = useUser();
   const [, setLocation] = useLocation();
 
@@ -39,7 +45,11 @@ function ProtectedRoute({ component: Component, allowedRole }: { component: any,
   }
 
   if (allowedRole && user.role !== allowedRole) {
-    return <div className="p-8 text-center text-red-500">Access Denied: You do not have permission to view this page.</div>;
+    return (
+      <div className="p-8 text-center text-red-500">
+        Access Denied: You do not have permission to view this page.
+      </div>
+    );
   }
 
   return <Component />;
@@ -50,8 +60,8 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Login} />
-        
-        {/* Protected Routes */}
+
+        {/* Employee Routes */}
         <Route path="/dashboard">
           <ProtectedRoute component={EmployeeDashboard} allowedRole="employee" />
         </Route>
@@ -59,7 +69,13 @@ function Router() {
         <Route path="/wellness">
           <ProtectedRoute component={WellnessCheckin} allowedRole="employee" />
         </Route>
-        
+
+        {/* NEW HELP INBOX ROUTE */}
+        <Route path="/help-inbox">
+          <ProtectedRoute component={HelpInbox} allowedRole="employee" />
+        </Route>
+
+        {/* Admin Routes */}
         <Route path="/admin">
           <ProtectedRoute component={AdminDashboard} allowedRole="admin" />
         </Route>
@@ -68,7 +84,7 @@ function Router() {
           <ProtectedRoute component={ReallocationLogs} allowedRole="admin" />
         </Route>
 
-        {/* Fallback to 404 */}
+        {/* Fallback */}
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -328,31 +328,44 @@ app.post("/api/stress", async (req, res) => {
   });
 
   app.patch("/api/help-requests/:id", async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-      const { status } = req.body; // 'accepted' | 'rejected'
-      const employeeId = req.headers['x-employee-id'];
-      
-      const helper = await storage.getEmployee(Number(employeeId));
-      if (!helper) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    const employeeId = req.headers["x-employee-id"];
 
-      const updated = await storage.updateHelpRequestStatus(id, status);
-      
-      const msg = status === 'accepted' 
-        ? `${helper.name} has accepted your help request.` 
+    if (!employeeId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const helper = await storage.getEmployee(Number(employeeId));
+    if (!helper) {
+      return res.status(404).json({ message: "Helper not found" });
+    }
+
+    // Update request status
+    const updated = await storage.updateHelpRequestStatus(id, status);
+
+    if (!updated) {
+      return res.status(404).json({ message: "Request not found" });
+    }
+
+    // Send notification to requester
+    const message =
+      status === "accepted"
+        ? `${helper.name} accepted your help request.`
         : `${helper.name} declined your help request.`;
 
-      await storage.createNotification({
-        employeeId: updated.requesterId,
-        message: msg
-      });
+    await storage.createNotification({
+      employeeId: updated.requesterId,
+      message,
+    });
 
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: 'Invalid request' });
-    }
-  });
-
+    res.json(updated);
+  } catch (err) {
+    console.error("Help request update error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
   app.get("/api/notifications", async (req, res) => {
     const employeeId = req.headers['x-employee-id'];
     if (!employeeId) return res.json([]);

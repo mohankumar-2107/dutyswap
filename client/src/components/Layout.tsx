@@ -1,6 +1,6 @@
 import { useUser, useLogout } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut, LayoutDashboard, User, ShieldCheck } from "lucide-react";
+import { LogOut, LayoutDashboard, User, ShieldCheck, Inbox } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -27,6 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <ShieldCheck className="w-4 h-4" /> Admin Dashboard
                 </Button>
               </Link>
+
               <Link href="/admin/reallocation">
                 <Button variant={location === '/admin/reallocation' ? "secondary" : "ghost"} className="w-full justify-start gap-3">
                   <LayoutDashboard className="w-4 h-4" /> Reallocation Logs
@@ -38,6 +39,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/dashboard">
                 <Button variant={location === '/dashboard' ? "secondary" : "ghost"} className="w-full justify-start gap-3">
                   <User className="w-4 h-4" /> My Dashboard
+                </Button>
+              </Link>
+
+              {/* NEW HELP INBOX MENU */}
+              <Link href="/help-inbox">
+                <Button variant={location === '/help-inbox' ? "secondary" : "ghost"} className="w-full justify-start gap-3">
+                  <Inbox className="w-4 h-4" /> Help Inbox
                 </Button>
               </Link>
             </>
@@ -54,7 +62,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
             </div>
           </div>
-          <Button variant="outline" className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => logout()}>
+
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50"
+            onClick={() => logout()}
+          >
             <LogOut className="w-4 h-4" /> Sign Out
           </Button>
         </div>

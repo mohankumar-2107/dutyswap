@@ -38,11 +38,21 @@ export default function EmployeeDashboard() {
     }
   }, [user?.id, queryClient]);
 
-  const { data: helpRequests, isLoading: helpLoading } = useQuery<any[]>({
-    queryKey: ["/api/help-requests"],
-    enabled: !!user?.id,
-    refetchInterval: 5000 // Poll for new help requests
-  });
+  const { data: helpRequests = [], isLoading: helpLoading } = useQuery<any[]>({
+  queryKey: ["/api/help-requests"],
+  enabled: !!user?.id,
+  refetchInterval: 5000,
+  queryFn: async () => {
+    const res = await fetch("/api/help-requests", {
+      headers: {
+        "x-employee-id": String(user?.id)
+      }
+    });
+
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+});
 
   const { data: eligibleHelpers } = useQuery<any[]>({
     queryKey: ["/api/employees"],
@@ -60,9 +70,18 @@ export default function EmployeeDashboard() {
   });
 
   const respondHelpMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number, status: string }) => {
-      return apiRequest("PATCH", `/api/help-requests/${id}`, { status });
-    },
+  mutationFn: async ({ id, status }: { id: number, status: string }) => {
+    const res = await fetch(`/api/help-requests/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-employee-id": String(user?.id),
+      },
+      body: JSON.stringify({ status }),
+    });
+
+    return res.json();
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/help-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -90,7 +109,9 @@ export default function EmployeeDashboard() {
 
   if (!user) return null;
 
-  const updatedToday = stressHistory?.some(log => isToday(new Date(log.date || log.loggedAt || "")));
+  const updatedToday = stressHistory?.some((log: any) =>
+  isToday(new Date(log.date || log.loggedAt || ""))
+);
   const isBurnoutRisk = (user.currentStress || 0) >= 4;
 
   return (
@@ -213,10 +234,13 @@ export default function EmployeeDashboard() {
                 <p className="text-xs text-muted-foreground italic">No eligible helpers available right now.</p>
               )}
 
-              {helpRequests && helpRequests.some(r => r.helperId === user.id && r.status === 'pending') && (
+              {Array.isArray(helpRequests) &&
+ helpRequests.some((r: any) => r.helperId === user.id && r.status === "pending") && (
                 <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
                   <p className="text-xs font-black uppercase tracking-widest text-gray-400">Incoming Requests</p>
-                  {helpRequests.filter(r => r.helperId === user.id && r.status === 'pending').map((req: any) => (
+                  {helpRequests
+  .filter((r: any) => r.helperId === user.id && r.status === "pending")
+  .map((req: any) => (
                     <div key={req.id} className="bg-yellow-400/10 p-4 rounded-2xl border border-yellow-200">
                       <p className="text-sm font-bold mb-3">{req.requester?.name} has requested your assistance.</p>
                       <div className="flex gap-2">
