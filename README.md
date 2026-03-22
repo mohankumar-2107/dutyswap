@@ -1,253 +1,256 @@
+<div align="center">
+
 # 🧠 DutySwap
-### Health-Aware Task Reallocation System for High-Stress Professional Environments
+### Health-Aware Task Reallocation System
 
-DutySwap is an **AI-assisted workload management system** that monitors employee stress levels and automatically redistributes tasks to prevent burnout and improve productivity.
+**DutySwap** is an AI-assisted workload management platform that monitors employee stress in real time and automatically redistributes tasks to prevent burnout and boost team productivity.
 
-The system uses a **rule-based stress scoring model** and a **Greedy Load Balancing algorithm** to intelligently redistribute tasks when employees experience high stress.
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?style=flat-square&logo=node.js)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)](https://typescriptlang.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)](https://react.dev)
+[![SQLite](https://img.shields.io/badge/SQLite-Drizzle_ORM-003B57?style=flat-square&logo=sqlite)](https://orm.drizzle.team)
 
----
-
-# 🚀 Features
-
-✔ Employee daily wellness check-in  
-✔ Stress level classification system  
-✔ Automatic task redistribution (AI)  
-✔ Admin dashboard for monitoring team wellness  
-✔ Task assignment and management  
-✔ Manual task reallocation  
-✔ Stress history tracking  
-✔ Help request system between employees  
-✔ Notification system  
-✔ Reallocation activity logs
+</div>
 
 ---
 
-# 🧩 System Architecture
+## ✨ Features
 
-            ┌─────────────────────────┐
-            │        Frontend         │
-            │  React + TypeScript    │
-            │  Vite + Tailwind CSS   │
-            └──────────┬─────────────┘
-                       │
-                       │ REST API
-                       ▼
-            ┌─────────────────────────┐
-            │         Backend         │
-            │ Node.js + Express + TS  │
-            │ Business Logic & AI     │
-            └──────────┬─────────────┘
-                       │
-                       ▼
-            ┌─────────────────────────┐
-            │        Database         │
-            │ SQLite + Drizzle ORM    │
-            └─────────────────────────┘
+| Feature | Description |
+|---------|-------------|
+| 📋 **Daily Wellness Check-in** | 10-question stress assessment for every employee |
+| 🤖 **AI Task Reallocation** | Greedy algorithm auto-redistributes tasks on high stress |
+| 🔄 **Manual Reallocation** | Admin can manually shift tasks between employees |
+| 📊 **Admin Dashboard** | Real-time stress charts, team status, and duty logs |
+| 🤝 **Peer Assistance** | Employees can request help from low-stress colleagues |
+| 💬 **In-App Chat** | Real-time messaging between peers via help requests |
+| 🔔 **Notifications** | Instant alerts for requests, acceptances, and updates |
+| 📈 **Stress History** | Track each employee's wellness trends over time |
+| 👥 **Employee Management** | Add, edit, and remove employees from the system |
 
 ---
 
-# 🧠 AI / Algorithm Logic
+## 🏗️ System Architecture
 
-### Stress Calculation
+```
+┌─────────────────────────┐
+│        Frontend         │
+│   React + TypeScript    │
+│   Vite + Tailwind CSS   │
+└──────────┬──────────────┘
+           │  REST API
+           ▼
+┌─────────────────────────┐
+│         Backend         │
+│  Node.js + Express + TS │
+│  Business Logic & AI    │
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│        Database         │
+│  SQLite + Drizzle ORM   │
+└─────────────────────────┘
+```
 
-Employees answer **10 wellness questions**
+---
 
-Each question score:
+## 🧠 AI & Algorithm Logic
 
+### Stress Scoring
 
-1 → Very Good
-2 → Normal
-3 → Stressed
-4 → Very Stressed
+Employees answer **10 wellness questions**, each scored 1–4:
 
+| Score | Meaning |
+|-------|---------|
+| 1 | Very Good |
+| 2 | Normal |
+| 3 | Stressed |
+| 4 | Very Stressed |
 
-Total Score Range:
-
-
-10 → Minimum Stress
-40 → Maximum Stress
-
+> Total score range: **10 (min)** → **40 (max)**
 
 ### Stress Classification
 
-| Score Range | Stress Level |
-|-------------|-------------|
-| 10 – 15 | Low |
-| 16 – 25 | Medium |
-| 26 – 40 | High |
+| Score Range | Stress Level | Action |
+|-------------|-------------|--------|
+| 10 – 15 | 🟢 Low | No action |
+| 16 – 25 | 🟡 Medium | Monitor |
+| 26 – 40 | 🔴 High | AI reallocation triggered |
+
+### Greedy Load Balancing Algorithm
+
+```
+1. Detect employee with HIGH stress
+2. Fetch their pending tasks
+3. Find all available low-stress employees
+4. Sort candidates by:
+   → Lowest stress level first
+   → Lowest task count as tiebreaker
+5. Redistribute tasks across sorted candidates
+6. Log every reallocation to duty logs
+```
 
 ---
 
-# ⚙️ Task Reallocation Algorithm
+## 📂 Project Structure
 
-DutySwap uses a **Greedy Load Balancing Algorithm**.
-
-### Steps
-
-1️⃣ Detect employee with **High Stress**
-
-2️⃣ Fetch employee's **pending tasks**
-
-3️⃣ Find employees with **lowest stress levels**
-
-4️⃣ Sort candidates by:
-
-
-lowest stress
-lowest task count
-
-
-5️⃣ Reassign tasks automatically
-
----
-
-# 📂 Project Structure
-
-
-DutySwap
+```
+DutySwap/
 │
-├── client/ # React Frontend
-│ └── src/
-│ ├── pages
-│ ├── components
-│ └── App.tsx
+├── client/                  # React Frontend
+│   └── src/
+│       ├── pages/           # AdminDashboard, EmployeeDashboard, etc.
+│       ├── components/      # StressBadge, Layout, etc.
+│       ├── hooks/           # useAuth, useTasks, useStress, etc.
+│       └── App.tsx
 │
-├── server/ # Backend
-│ ├── index.ts
-│ ├── routes.ts
-│ ├── storage.ts
-│ └── db.ts
+├── server/                  # Express Backend
+│   ├── index.ts
+│   ├── routes.ts            # All API routes
+│   ├── storage.ts           # Database access layer
+│   └── db.ts                # Drizzle DB connection
 │
 ├── shared/
-│ └── schema.ts # Database schema
+│   └── schema.ts            # Database schema & Zod types
 │
-├── drizzle/ # ORM migration files
-│
+├── drizzle/                 # ORM migration files
+├── sqlite.db                # SQLite database file
 ├── package.json
-├── sqlite.db
 └── README.md
-
+```
 
 ---
 
-# 🖥️ Running the Project (From Scratch)
+## ⚡ Quick Setup After Pulling
 
-Running the Project on Another System
+> Already cloned the repo? Just run these 4 commands:
 
-Follow the steps below to run this project from scratch.
+```bash
+git pull
+npm install
+npx drizzle-kit push
+npm run dev
+```
 
-Step 1 – Install Required Software
+> **Note:** When `drizzle-kit push` prompts you, select **"+ create column"** for any new columns and press Enter to confirm.
 
-Install the following tools.
+---
 
-Node.js (Version 18 or later)
+## 🖥️ Full Setup From Scratch
 
-Download from:
-https://nodejs.org
+### Step 1 — Install Required Software
 
-Verify installation:
-
+**Node.js v18+**
+```bash
+# Download from https://nodejs.org
 node -v
 npm -v
+```
 
-Install Git if not installed.
-
-Download from:
-https://git-scm.com
-
-Verify installation:
-
+**Git**
+```bash
+# Download from https://git-scm.com
 git --version
+```
 
-Step 2 – Clone the Repository
+---
 
-Open terminal or command prompt.
+### Step 2 — Clone the Repository
 
-Run:
-
+```bash
 git clone https://github.com/mohankumar-2107/dutyswap.git
-
-Move into the project folder:
-
 cd dutyswap
+```
 
-Step 3 – Install Project Dependencies
+---
 
-Run the following command:
+### Step 3 — Install Dependencies
 
+```bash
 npm install
+```
 
-This will install all required libraries such as React, Express, TypeScript, Tailwind, Drizzle ORM and other dependencies.
+Installs React, Express, TypeScript, Tailwind CSS, Drizzle ORM, and all other dependencies.
 
-Step 4 – Setup the Database
+---
 
-The project uses SQLite.
+### Step 4 — Setup the Database
 
-If the database file does not exist, it will automatically be created when the server starts.
+```bash
+npx drizzle-kit push
+```
 
-If you want to reset the database, delete the file:
+- SQLite database (`sqlite.db`) is created automatically on first run
+- Run the above command to sync the latest schema
 
-sqlite.db
+**To reset the database:**
+```bash
+# Windows
+del sqlite.db
 
-Then restart the server.
+# Mac / Linux
+rm sqlite.db
+```
+Then restart the server — it will re-seed with default data automatically.
 
-Step 5 – Start the Development Server
+---
 
-Run:
+### Step 5 — Start the Development Server
 
+```bash
 npm run dev
+```
 
-This will start both the backend server and the frontend application.
+Starts both the backend (Express) and frontend (React + Vite) together.
 
-Expected output:
+```
+✓ Server running at http://localhost:3000
+```
 
-Server running at http://localhost:3000
+---
 
-Step 6 – Open the Application
+### Step 6 — Open the Application
 
-Open your browser and go to:
-
+```
 http://localhost:3000
+```
 
-Default Login Credentials
+---
 
-Admin Login
+## 🔐 Login Credentials
 
-Username: admin
-Password: admin123
+### Admin
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `admin123` |
 
-Employee Login
+### Employee
+Employees log in using their **Employee ID**.
 
-Employees log in using their Employee ID.
+| Name | Employee ID |
+|------|-------------|
+| Alice Johnson | `2` |
+| Bob Smith | `3` |
+| Charlie Brown | `4` |
 
-Example seeded employees:
+---
 
-Alice Johnson
-Bob Smith
-Charlie Brown
+## 🔮 Future Improvements
 
-How the System Works
+- [ ] Machine learning based stress prediction
+- [ ] Stress trend analysis and forecasting
+- [ ] Email / Slack notification integration
+- [ ] Team stress heatmap visualization
+- [ ] Advanced task prioritization models
+- [ ] Predictive workload balancing
+- [ ] Mobile app support
 
-Employees complete the daily wellness check-in questionnaire.
+---
 
-The system calculates the stress score.
+<div align="center">
 
-If stress is classified as high, the AI engine activates.
+Made with ❤️ by **GB**
 
-The algorithm redistributes tasks among employees with lower stress levels.
-
-The admin dashboard updates in real time to show stress distribution and reallocation logs.
-
-Future Improvements
-
-Possible enhancements include:
-
-
-Machine learning based stress prediction
-Stress trend analysis over time
-Email or Slack notifications
-Team stress heatmaps
-Advanced task prioritization models
-Predictive workload balancing
-
--GB
+</div>
