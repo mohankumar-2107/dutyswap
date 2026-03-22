@@ -1,6 +1,6 @@
 import { useEmployees, useCreateEmployee } from "@/hooks/use-employees";
-import { useTasks, useCreateTask, useReassignTask, useCompleteTask } from "@/hooks/use-tasks";
-import { useAdminStats, useDutyLogs } from "@/hooks/use-stress";
+import { useTasks, useCreateTask, useReassignTask } from "@/hooks/use-tasks";
+import { useAdminStats } from "@/hooks/use-stress";
 import { StressBadge } from "@/components/StressBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
-import { Users, AlertTriangle, CheckCircle, BarChart3, Plus, Search, ArrowRightLeft } from "lucide-react";
+import { Users, AlertTriangle, CheckCircle, BarChart3, Plus, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 
-const COLORS = ['#10b981', '#f59e0b', '#ef4444']; // Green, Amber, Red
+const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
 export default function AdminDashboard() {
   const { data: employees } = useEmployees();
@@ -29,23 +29,20 @@ export default function AdminDashboard() {
   const [isEmployeeOpen, setIsEmployeeOpen] = useState(false);
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   const [isReassignOpen, setIsReassignOpen] = useState(false);
-  
+
+  // Edit employee state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<any>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("employee");
+
+  // Delete confirm state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deletingEmp, setDeletingEmp] = useState<any>(null);
+
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [newAssignee, setNewAssignee] = useState("");
 
-  const reassignMutation = useReassignTask();
-
-  const handleReassign = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !newAssignee) return;
-    reassignMutation.mutate({ taskId: selectedTask.id, newAssigneeId: parseInt(newAssignee) }, {
-      onSuccess: () => {
-        setIsReassignOpen(false);
-        toast({ title: "Task Reassigned", description: "The task has been successfully moved." });
-      }
-    });
-  };
-  
   // Employee Form State
   const [empName, setEmpName] = useState("");
   const [empRole, setEmpRole] = useState("employee");
@@ -55,24 +52,73 @@ export default function AdminDashboard() {
   const [taskPriority, setTaskPriority] = useState("Medium");
   const [taskAssignee, setTaskAssignee] = useState("");
 
+  const reassignMutation = useReassignTask();
+
+  // Edit employee mutation
+  const editEmployeeMutation = useMutation({
+    mutationFn: async ({ id, name, role }: { id: number; name: string; role: string }) => {
+      const res = await fetch(`/api/employees/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role })
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsEditOpen(false);
+      setEditingEmp(null);
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      toast({ title: "Employee Updated", description: `${editName} has been updated.` });
+    }
+  });
+
+  // Delete employee mutation
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsDeleteOpen(false);
+      setDeletingEmp(null);
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      toast({ title: "Employee Removed", description: `${deletingEmp?.name} has been removed.`, variant: "destructive" });
+    }
+  });
+
+  // ✅ FIX ERROR 1 & 2: handleCreateEmployee is now a proper function (not called outside)
   const handleCreateEmployee = (e: React.FormEvent) => {
     e.preventDefault();
-    createEmployee({ name: empName, role: empRole, username: empName.toLowerCase().replace(/\s/g, '') }, {
-      onSuccess: () => {
-        setIsEmployeeOpen(false);
-        setEmpName("");
-        toast({ title: "Employee Created", description: `${empName} added successfully.` });
+    createEmployee(
+      {
+        name: empName,
+        role: empRole,
+        username: empName.toLowerCase().replace(/\s/g, '')
+      },
+      {
+        onSuccess: () => {
+          setIsEmployeeOpen(false);
+          setEmpName("");
+          queryClient.invalidateQueries({ queryKey: ["employees"] });
+          queryClient.invalidateQueries({ queryKey: ["stats"] });
+          toast({
+            title: "Employee Created",
+            description: `${empName} added successfully.`
+          });
+        }
       }
-    });
+    );
   };
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskAssignee) return;
-    createTask({ 
-      title: taskTitle, 
-      priority: taskPriority, 
-      assignedToId: parseInt(taskAssignee) 
+    createTask({
+      title: taskTitle,
+      priority: taskPriority,
+      assignedToId: parseInt(taskAssignee)
     }, {
       onSuccess: () => {
         setIsTaskOpen(false);
@@ -81,6 +127,40 @@ export default function AdminDashboard() {
         toast({ title: "Task Assigned", description: "Task successfully assigned." });
       }
     });
+  };
+
+  // ✅ FIX: handleReassign clears UI state and force-refetches all relevant queries
+  const handleReassign = () => {
+    if (!selectedTask || !newAssignee) return;
+    reassignMutation.mutate(
+      {
+        taskId: selectedTask.id,
+        newAssigneeId: parseInt(newAssignee)
+      },
+      {
+        onSuccess: () => {
+          // Clear the card UI immediately
+          setSelectedTask(null);
+          setNewAssignee("");
+          setIsReassignOpen(false);
+
+          // Force refetch — invalidate ALL queries so nothing stays stale
+          queryClient.invalidateQueries();
+
+          toast({
+            title: "✅ Task Reassigned",
+            description: `Task successfully moved to new assignee.`
+          });
+        },
+        onError: () => {
+          toast({
+            title: "❌ Reassign Failed",
+            description: "Something went wrong. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
+    );
   };
 
   const pieData = stats ? [
@@ -112,6 +192,7 @@ export default function AdminDashboard() {
                 <DialogTitle>Add New Employee</DialogTitle>
                 <DialogDescription>Create a new user account for the system.</DialogDescription>
               </DialogHeader>
+              {/* ✅ FIX ERROR 1: Now correctly references handleCreateEmployee */}
               <form onSubmit={handleCreateEmployee} className="space-y-4 pt-4">
                 <div className="space-y-2">
                   <Label>Full Name</Label>
@@ -163,8 +244,8 @@ export default function AdminDashboard() {
                   <Label>Assignee</Label>
                   <Select value={taskAssignee} onValueChange={setTaskAssignee}>
                     <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Select employee" /></SelectTrigger>
-                    <SelectContent>
-                      {employees?.map(emp => (
+                    <SelectContent className="z-[9999] bg-white border border-gray-200 shadow-2xl">
+                      {employees?.filter((emp: any) => emp.role !== 'admin').map((emp: any) => (
                         <SelectItem key={emp.id} value={emp.id.toString()}>{emp.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -254,35 +335,64 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {employees?.map((emp) => (
+                    {/* ✅ Filter out admin rows, show only employees */}
+                    {employees?.filter((emp: any) => emp.role !== 'admin').map((emp: any) => (
                       <TableRow key={emp.id} className="hover:bg-yellow-50/30 transition-colors border-gray-50">
                         <TableCell className="font-bold text-gray-900">{emp.name}</TableCell>
                         <TableCell className="capitalize font-medium text-gray-500">{emp.role}</TableCell>
                         <TableCell><StressBadge level={emp.currentStress} /></TableCell>
                         <TableCell className="text-center">
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${emp.role === 'admin' ? 'hidden' : (emp as any).updatedToday ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {emp.role === 'admin' ? '' : (emp as any).updatedToday ? 'COMPLETE' : 'PENDING'}
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${emp.updatedToday ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {emp.updatedToday ? 'COMPLETE' : 'PENDING'}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="rounded-xl font-bold text-yellow-600 hover:text-yellow-700 hover:bg-yellow-100"
-                            onClick={() => {
-                              const task = allTasks?.find(t => t.assignedToId === emp.id && t.status === 'Pending');
-                              if (task) {
-                                setSelectedTask(task);
-                                setNewAssignee(""); // Reset assignee when picking a new task
-                                // Scroll to the reallocation card for better UX
-                                document.getElementById('manual-reallocation-card')?.scrollIntoView({ behavior: 'smooth' });
-                              } else {
-                                toast({ title: "No Pending Tasks", description: `${emp.name} has no pending tasks to reallocate.` });
-                              }
-                            }}
-                          >
-                            Manage Tasks
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Manage Tasks */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl font-bold text-yellow-600 hover:text-yellow-700 hover:bg-yellow-100"
+                              onClick={() => {
+                                const task = allTasks?.find((t: any) => t.assignedToId === emp.id && t.status === 'Pending');
+                                if (task) {
+                                  setSelectedTask(task);
+                                  setNewAssignee("");
+                                  document.getElementById('manual-reallocation-card')?.scrollIntoView({ behavior: 'smooth' });
+                                } else {
+                                  toast({ title: "No Pending Tasks", description: `${emp.name} has no pending tasks to reallocate.` });
+                                }
+                              }}
+                            >
+                              Manage Tasks
+                            </Button>
+                            {/* Edit */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                              onClick={() => {
+                                setEditingEmp(emp);
+                                setEditName(emp.name);
+                                setEditRole(emp.role);
+                                setIsEditOpen(true);
+                              }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            {/* Remove */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setDeletingEmp(emp);
+                                setIsDeleteOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -337,16 +447,16 @@ export default function AdminDashboard() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs uppercase font-black text-gray-400">Select Task to Move</Label>
-                <Select 
-                  value={selectedTask?.id?.toString() || ""} 
+                <Select
+                  value={selectedTask?.id?.toString() || ""}
                   onValueChange={(val) => {
-                    setSelectedTask(allTasks?.find(t => t.id === parseInt(val)));
+                    setSelectedTask(allTasks?.find((t: any) => t.id === parseInt(val)));
                     setNewAssignee("");
                   }}
                 >
                   <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Choose a pending task..." /></SelectTrigger>
-                  <SelectContent>
-                    {allTasks?.filter(t => t.status === 'Pending').map(task => (
+                  <SelectContent className="z-[9999] bg-white border border-gray-200 shadow-2xl">
+                    {allTasks?.filter((t: any) => t.status === 'Pending').map((task: any) => (
                       <SelectItem key={task.id} value={task.id.toString()}>
                         {task.title} (Currently: {task.assignee?.name})
                       </SelectItem>
@@ -369,8 +479,8 @@ export default function AdminDashboard() {
                     <Label className="text-xs uppercase font-black text-gray-400">Move To (Low Stress Only)</Label>
                     <Select value={newAssignee} onValueChange={setNewAssignee}>
                       <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Select replacement..." /></SelectTrigger>
-                      <SelectContent>
-                        {employees?.filter(e => e.id !== selectedTask.assignedToId && e.role === 'employee' && (e.currentStress || 0) <= 2).map(emp => (
+                      <SelectContent className="z-[9999] bg-white border border-gray-200 shadow-2xl">
+                        {employees?.filter((e: any) => e.id !== selectedTask.assignedToId && e.role === 'employee' && (e.currentStress || 0) <= 2).map((emp: any) => (
                           <SelectItem key={emp.id} value={emp.id.toString()}>
                             {emp.name} (Stress: {emp.currentStress || 0})
                           </SelectItem>
@@ -379,7 +489,7 @@ export default function AdminDashboard() {
                     </Select>
                   </div>
 
-                  <Button 
+                  <Button
                     className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-xl"
                     onClick={handleReassign}
                     disabled={!newAssignee || reassignMutation.isPending}
@@ -392,6 +502,79 @@ export default function AdminDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* ✅ Edit Employee Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogDescription>Update the employee's name or role.</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!editingEmp) return;
+              editEmployeeMutation.mutate({ id: editingEmp.id, name: editName, role: editRole });
+            }}
+            className="space-y-4 pt-4"
+          >
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Employee name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl"
+              disabled={editEmployeeMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ Delete Confirm Dialog */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Employee</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <strong>{deletingEmp?.name}</strong>? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setIsDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl"
+              onClick={() => deletingEmp && deleteEmployeeMutation.mutate(deletingEmp.id)}
+              disabled={deleteEmployeeMutation.isPending}
+            >
+              Yes, Remove
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

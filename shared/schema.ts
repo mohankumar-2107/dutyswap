@@ -8,15 +8,10 @@ import { z } from "zod";
 
 export const employees = sqliteTable("employees", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   name: text("name").notNull(),
-
   role: text("role").notNull(), // admin | employee
-
   currentStress: integer("current_stress").default(0),
-
   username: text("username").unique(),
-
   password: text("password"),
 });
 
@@ -25,15 +20,10 @@ export const employees = sqliteTable("employees", {
 
 export const tasks = sqliteTable("tasks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   title: text("title").notNull(),
-
   assignedToId: integer("assigned_to_id"),
-
   priority: text("priority").notNull(), // Low Medium High
-
   status: text("status").notNull().default("Pending"),
-
   createdAt: integer("created_at").default(Date.now()),
 });
 
@@ -42,17 +32,11 @@ export const tasks = sqliteTable("tasks", {
 
 export const stressLogs = sqliteTable("stress_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   employeeId: integer("employee_id").notNull(),
-
   stressLevel: integer("stress_level").notNull(),
-
   totalScore: integer("total_score"),
-
   answers: text("answers"), // JSON string
-
   loggedAt: integer("logged_at").default(Date.now()),
-
   date: text("date"),
 });
 
@@ -61,15 +45,10 @@ export const stressLogs = sqliteTable("stress_logs", {
 
 export const dutyLogs = sqliteTable("duty_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   taskId: integer("task_id"),
-
   fromEmployeeId: integer("from_employee_id"),
-
   toEmployeeId: integer("to_employee_id"),
-
   reallocationDate: integer("reallocation_date").default(Date.now()),
-
   reason: text("reason").default("High Stress Auto-Reallocation"),
 });
 
@@ -78,14 +57,11 @@ export const dutyLogs = sqliteTable("duty_logs", {
 
 export const messages = sqliteTable("messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
-  employeeId: integer("employee_id"),
-
+  // ✅ Links message to a help request conversation thread
+  helpRequestId: integer("help_request_id").notNull(),
+  senderId: integer("sender_id").notNull(),
   content: text("content").notNull(),
-
   sentAt: integer("sent_at").default(Date.now()),
-
-  isRead: integer("is_read").default(0), // 0=false 1=true
 });
 
 
@@ -93,13 +69,9 @@ export const messages = sqliteTable("messages", {
 
 export const notifications = sqliteTable("notifications", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   employeeId: integer("employee_id").notNull(),
-
   message: text("message").notNull(),
-
   timestamp: integer("timestamp").default(Date.now()),
-
   readStatus: integer("read_status").default(0),
 });
 
@@ -108,26 +80,11 @@ export const notifications = sqliteTable("notifications", {
 
 export const helpRequests = sqliteTable("help_requests", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-
   requesterId: integer("requester_id").notNull(),
-
   helperId: integer("helper_id").notNull(),
-
   status: text("status").default("pending"),
-
   timestamp: integer("timestamp").default(Date.now()),
 });
-export const helpRequestsRelations = relations(helpRequests, ({ one }) => ({
-  requester: one(employees, {
-    fields: [helpRequests.requesterId],
-    references: [employees.id],
-  }),
-
-  helper: one(employees, {
-    fields: [helpRequests.helperId],
-    references: [employees.id],
-  }),
-}));
 
 
 /* ======================================================
@@ -137,9 +94,8 @@ export const helpRequestsRelations = relations(helpRequests, ({ one }) => ({
 export const employeesRelations = relations(employees, ({ many }) => ({
   tasks: many(tasks),
   stressLogs: many(stressLogs),
-  messages: many(messages),
+  sentMessages: many(messages),          // ✅ FIX: was "messages" — renamed to avoid conflict
 }));
-
 
 export const tasksRelations = relations(tasks, ({ one }) => ({
   assignee: one(employees, {
@@ -147,6 +103,7 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
     references: [employees.id],
   }),
 }));
+
 export const dutyLogsRelations = relations(dutyLogs, ({ one }) => ({
   task: one(tasks, {
     fields: [dutyLogs.taskId],
@@ -162,6 +119,30 @@ export const dutyLogsRelations = relations(dutyLogs, ({ one }) => ({
   }),
 }));
 
+// ✅ FIX: messagesRelations was completely missing — drizzle query.messages.findMany would fail
+export const messagesRelations = relations(messages, ({ one }) => ({
+  helpRequest: one(helpRequests, {
+    fields: [messages.helpRequestId],
+    references: [helpRequests.id],
+  }),
+  sender: one(employees, {
+    fields: [messages.senderId],
+    references: [employees.id],
+  }),
+}));
+
+export const helpRequestsRelations = relations(helpRequests, ({ one, many }) => ({
+  requester: one(employees, {
+    fields: [helpRequests.requesterId],
+    references: [employees.id],
+  }),
+  helper: one(employees, {
+    fields: [helpRequests.helperId],
+    references: [employees.id],
+  }),
+  // ✅ FIX: Added messages relation so helpRequest.messages works in queries
+  messages: many(messages),
+}));
 
 
 /* ======================================================
@@ -187,7 +168,6 @@ export const insertStressLogSchema = createInsertSchema(stressLogs).omit({
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   sentAt: true,
-  isRead: true,
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
@@ -200,7 +180,6 @@ export const insertHelpRequestSchema = createInsertSchema(helpRequests).omit({
   id: true,
   timestamp: true,
 });
-
 
 
 /* ======================================================

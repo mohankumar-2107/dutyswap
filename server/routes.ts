@@ -53,7 +53,6 @@ export async function registerRoutes(
       if (user) return res.json(user);
     }
 
-    // Check query params as well for redirects
     const queryId = req.query.employeeId;
     if (queryId && !isNaN(Number(queryId))) {
       const user = await storage.getEmployee(Number(queryId));
@@ -68,7 +67,6 @@ export async function registerRoutes(
     const list = await storage.getEmployees();
     const today = new Date().toISOString().split('T')[0];
     
-    // Add update status for each employee
     const enriched = await Promise.all(list.map(async emp => {
       const logs = await storage.getStressLogs(emp.id);
       const updatedToday = logs.some(l => l.date === today);
@@ -95,9 +93,33 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const employee = await storage.getEmployee(id);
       if (!employee) return res.status(404).json({ message: 'Not found' });
-      
       const logs = await storage.getStressLogs(id);
       res.json({ ...employee, stressLogs: logs });
+  });
+
+  // ✅ Edit employee name/role
+  app.patch("/api/employees/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { name, role } = req.body;
+      const updated = await storage.updateEmployee(id, { name, role });
+      if (!updated) return res.status(404).json({ message: "Employee not found" });
+      queryClient.invalidateQueries?.({ queryKey: ["employees"] });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update employee" });
+    }
+  });
+
+  // ✅ Delete employee
+  app.delete("/api/employees/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      await storage.deleteEmployee(id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete employee" });
+    }
   });
 
   // === TASKS ===
@@ -107,192 +129,205 @@ export async function registerRoutes(
     res.json(tasks);
   });
 
-app.post(api.tasks.create.path, async (req, res) => {
-  try {
+  app.post(api.tasks.create.path, async (req, res) => {
+    try {
+      const input = api.tasks.create.input.parse(req.body);
+      const task = await storage.createTask(input);
 
-    const input = api.tasks.create.input.parse(req.body);
-
-    const task = await storage.createTask(input);
-
-    // ensure assigned employee exists
-    if (!input.assignedToId) {
-      return res.status(400).json({ message: "Task must have an assignee" });
-    }
-
-    const employee = await storage.getEmployee(input.assignedToId);
-
-    // 🔹 AI check after assigning task
-    if (employee && (employee.currentStress ?? 0) >= 4) {
-
-      const pendingTasks = await storage.getPendingTasksForEmployee(employee.id);
-
-      if (pendingTasks.length > 1) {
-
-        const candidates = await storage.getLowStressEmployees(employee.id);
-
-        if (candidates.length > 0) {
-
-          const extraTasks = pendingTasks.slice(1);
-
-          for (const t of extraTasks) {
-
-            const target = candidates[0];
-
-            await storage.reassignTask(t.id, target.id);
-
-            await storage.logDutyReallocation(
-              t.id,
-              employee.id,
-              target.id,
-              "AI Auto-Reallocation (Task Assigned)"
-            );
-
-          }
-
-        }
-
+      if (!input.assignedToId) {
+        return res.status(400).json({ message: "Task must have an assignee" });
       }
 
+      const employee = await storage.getEmployee(input.assignedToId);
+
+      if (employee && (employee.currentStress ?? 0) >= 4) {
+        const pendingTasks = await storage.getPendingTasksForEmployee(employee.id);
+
+        if (pendingTasks.length > 1) {
+          const candidates = await storage.getLowStressEmployees(employee.id);
+
+          if (candidates.length > 0) {
+            const extraTasks = pendingTasks.slice(1);
+
+            for (const t of extraTasks) {
+              const target = candidates[0];
+              await storage.reassignTask(t.id, target.id);
+              await storage.logDutyReallocation(
+                t.id,
+                employee.id,
+                target.id,
+                "AI Auto-Reallocation (Task Assigned)"
+              );
+            }
+          }
+        }
+      }
+
+      res.status(201).json(task);
+    } catch (err) {
+      res.status(400).json({ message: "Validation error" });
     }
+  });
 
-    res.status(201).json(task);
+  // ✅ FIX: MISSING REASSIGN ROUTE — this is why onError was firing despite 200
+  app.post(api.tasks.reassign.path, async (req, res) => {
+    try {
+      const taskId = Number(req.params.id);
+      const { newAssigneeId } = req.body;
 
-  } catch (err) {
-    res.status(400).json({ message: "Validation error" });
-  }
-});
+      if (!taskId || isNaN(taskId)) {
+        return res.status(400).json({ message: "Invalid task ID" });
+      }
+
+      if (!newAssigneeId || isNaN(Number(newAssigneeId))) {
+        return res.status(400).json({ message: "Invalid newAssigneeId" });
+      }
+
+      // Get the task to find original assignee for the log
+      const allTasks = await storage.getTasks();
+      const task = allTasks.find(t => t.id === taskId);
+
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      // ✅ FIX: originalAssigneeId is number | null — guard against null before passing to logDutyReallocation
+      const originalAssigneeId = task.assignedToId ?? 0;
+
+      // Reassign the task
+      const updated = await storage.reassignTask(taskId, Number(newAssigneeId));
+
+      // Log the manual reallocation
+      await storage.logDutyReallocation(
+        taskId,
+        originalAssigneeId,
+        Number(newAssigneeId),
+        "Manual Reallocation (Admin)"
+      );
+
+      res.json({ success: true, task: updated });
+    } catch (err) {
+      console.error("Reassign error:", err);
+      res.status(500).json({ message: "Failed to reassign task" });
+    }
+  });
+
+  // ✅ Complete task route — marks task as Completed
+  app.post(api.tasks.complete.path, async (req, res) => {
+    try {
+      const taskId = Number(req.params.id);
+      if (!taskId || isNaN(taskId)) return res.status(400).json({ message: "Invalid task ID" });
+      const updated = await storage.updateTaskStatus(taskId, "Completed");
+      if (!updated) return res.status(404).json({ message: "Task not found" });
+      res.json(updated);
+    } catch (err) {
+      console.error("Complete task error:", err);
+      res.status(500).json({ message: "Failed to complete task" });
+    }
+  });
+
+  // ✅ Explicit hardcoded path as fallback — guarantees /api/tasks/:id/complete always works
+  app.post("/api/tasks/:id/complete", async (req, res) => {
+    try {
+      const taskId = Number(req.params.id);
+      if (!taskId || isNaN(taskId)) return res.status(400).json({ message: "Invalid task ID" });
+      const updated = await storage.updateTaskStatus(taskId, "Completed");
+      if (!updated) return res.status(404).json({ message: "Task not found" });
+      res.json(updated);
+    } catch (err) {
+      console.error("Complete task error:", err);
+      res.status(500).json({ message: "Failed to complete task" });
+    }
+  });
 
   // === STRESS & AI CHAT LOGIC ===
-// === STRESS & AI CHAT LOGIC ===
-app.post("/api/stress", async (req, res) => {
-  try {
-    const { employeeId, totalScore, answers } = req.body;
+  app.post("/api/stress", async (req, res) => {
+    try {
+      const { employeeId, totalScore, answers } = req.body;
 
-    if (!employeeId || typeof employeeId !== "number") {
-      return res.status(400).json({ message: "Invalid employeeId" });
-    }
+      if (!employeeId || typeof employeeId !== "number") {
+        return res.status(400).json({ message: "Invalid employeeId" });
+      }
 
-    if (!Array.isArray(answers) || answers.length !== 10) {
-      return res.status(400).json({ message: "Answers must contain 10 values" });
-    }
+      if (!Array.isArray(answers) || answers.length !== 10) {
+        return res.status(400).json({ message: "Answers must contain 10 values" });
+      }
 
-    const rawScore =
-      Number(totalScore) || answers.reduce((a: number, b: number) => a + b, 0);
+      const rawScore =
+        Number(totalScore) || answers.reduce((a: number, b: number) => a + b, 0);
 
-    // === STRESS CLASSIFICATION ===
-    let calculatedLevel = 1;
+      let calculatedLevel = 1;
+      if (rawScore >= 26) calculatedLevel = 5;
+      else if (rawScore >= 16) calculatedLevel = 3;
+      else calculatedLevel = 1;
 
-    if (rawScore >= 26) calculatedLevel = 5;
-    else if (rawScore >= 16) calculatedLevel = 3;
-    else calculatedLevel = 1;
+      console.log("Stress submission:", { employeeId, rawScore, answers, calculatedLevel });
 
-    console.log("Stress submission:", {
-      employeeId,
-      rawScore,
-      answers,
-      calculatedLevel,
-    });
+      const log = await storage.logStress({
+        employeeId,
+        totalScore: rawScore,
+        answers: JSON.stringify(answers),
+        stressLevel: calculatedLevel,
+      });
 
-    // === SAVE STRESS LOG ===
-    const log = await storage.logStress({
-      employeeId,
-      totalScore: rawScore,
-      answers: JSON.stringify(answers),
-      stressLevel: calculatedLevel,
-    });
+      await storage.updateEmployeeStress(employeeId, calculatedLevel);
 
-    // === UPDATE EMPLOYEE STRESS ===
-    await storage.updateEmployeeStress(employeeId, calculatedLevel);
+      let reallocation = false;
+      let message = `Wellness check-in completed. Stress level ${
+        calculatedLevel === 1 ? "Low" : calculatedLevel === 3 ? "Medium" : "High"
+      }`;
 
-    let reallocation = false;
-    let message = `Wellness check-in completed. Stress level ${
-      calculatedLevel === 1
-        ? "Low"
-        : calculatedLevel === 3
-        ? "Medium"
-        : "High"
-    }`;
+      if (calculatedLevel >= 4) {
+        console.log("AI REALLOCATION TRIGGERED");
+        const pendingTasks = await storage.getPendingTasksForEmployee(employeeId);
+        console.log("Employee pending tasks:", pendingTasks.length);
 
-    // =============================
-    // === AI TASK REALLOCATION ===
-    // =============================
-    if (calculatedLevel >= 4) {
-      console.log("AI REALLOCATION TRIGGERED");
+        if (pendingTasks.length >= 1) {
+          const candidates = await storage.getLowStressEmployees(employeeId);
+          console.log("Available candidates:", candidates.length);
 
-      const pendingTasks = await storage.getPendingTasksForEmployee(employeeId);
-
-      console.log("Employee pending tasks:", pendingTasks.length);
-
-      if (pendingTasks.length >=1) {
-        const candidates = await storage.getLowStressEmployees(employeeId);
-
-        console.log("Available candidates:", candidates.length);
-
-        if (candidates.length > 0) {
-
-          const candidatesWithLoad = await Promise.all(
-            candidates.map(async (c) => {
-              const tasks = await storage.getPendingTasksForEmployee(c.id);
-              return {
-                employee: c,
-                taskCount: tasks.length,
-              };
-            })
-          );
-
-          // === Greedy sorting ===
-          candidatesWithLoad.sort((a, b) => {
-            const stressDiff =
-              (a.employee.currentStress ?? 0) -
-              (b.employee.currentStress ?? 0);
-
-            if (stressDiff !== 0) return stressDiff;
-
-            return a.taskCount - b.taskCount;
-          });
-
-          const extraTasks = pendingTasks.slice(1);
-
-          for (let i = 0; i < extraTasks.length; i++) {
-            const task = extraTasks[i];
-
-            const target =
-              candidatesWithLoad[i % candidatesWithLoad.length].employee;
-
-            console.log(
-              `Reassigning task ${task.id} from ${employeeId} to ${target.id}`
+          if (candidates.length > 0) {
+            const candidatesWithLoad = await Promise.all(
+              candidates.map(async (c) => {
+                const tasks = await storage.getPendingTasksForEmployee(c.id);
+                return { employee: c, taskCount: tasks.length };
+              })
             );
 
-            await storage.reassignTask(task.id, target.id);
+            candidatesWithLoad.sort((a, b) => {
+              const stressDiff = (a.employee.currentStress ?? 0) - (b.employee.currentStress ?? 0);
+              if (stressDiff !== 0) return stressDiff;
+              return a.taskCount - b.taskCount;
+            });
 
-            await storage.logDutyReallocation(
-              task.id,
-              employeeId,
-              target.id,
-              `AI Auto-Reallocation (Stress Level ${calculatedLevel})`
-            );
+            const extraTasks = pendingTasks.slice(1);
+
+            for (let i = 0; i < extraTasks.length; i++) {
+              const task = extraTasks[i];
+              const target = candidatesWithLoad[i % candidatesWithLoad.length].employee;
+              console.log(`Reassigning task ${task.id} from ${employeeId} to ${target.id}`);
+              await storage.reassignTask(task.id, target.id);
+              await storage.logDutyReallocation(
+                task.id,
+                employeeId,
+                target.id,
+                `AI Auto-Reallocation (Stress Level ${calculatedLevel})`
+              );
+            }
+
+            reallocation = true;
+            message = `${extraTasks.length} tasks automatically redistributed due to high stress.`;
           }
-
-          reallocation = true;
-
-          message = `${extraTasks.length} tasks automatically redistributed due to high stress.`;
         }
       }
-    }
 
-    res.json({
-      success: true,
-      log,
-      reallocation,
-      message,
-    });
-  } catch (err) {
-    console.error("Stress API error:", err);
-    res
-      .status(500)
-      .json({ message: "Server error processing stress assessment" });
-  }
-});
+      res.json({ success: true, log, reallocation, message });
+    } catch (err) {
+      console.error("Stress API error:", err);
+      res.status(500).json({ message: "Server error processing stress assessment" });
+    }
+  });
+
   // === HELP REQUESTS ===
   app.get("/api/help-requests", async (req, res) => {
     const employeeId = req.headers['x-employee-id'];
@@ -328,44 +363,43 @@ app.post("/api/stress", async (req, res) => {
   });
 
   app.patch("/api/help-requests/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { status } = req.body;
-    const employeeId = req.headers["x-employee-id"];
+    try {
+      const id = Number(req.params.id);
+      const { status } = req.body;
+      const employeeId = req.headers["x-employee-id"];
 
-    if (!employeeId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      if (!employeeId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const helper = await storage.getEmployee(Number(employeeId));
+      if (!helper) {
+        return res.status(404).json({ message: "Helper not found" });
+      }
+
+      const updated = await storage.updateHelpRequestStatus(id, status);
+
+      if (!updated) {
+        return res.status(404).json({ message: "Request not found" });
+      }
+
+      const message =
+        status === "accepted"
+          ? `${helper.name} accepted your help request.`
+          : `${helper.name} declined your help request.`;
+
+      await storage.createNotification({
+        employeeId: updated.requesterId,
+        message,
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error("Help request update error:", err);
+      res.status(500).json({ message: "Server error" });
     }
+  });
 
-    const helper = await storage.getEmployee(Number(employeeId));
-    if (!helper) {
-      return res.status(404).json({ message: "Helper not found" });
-    }
-
-    // Update request status
-    const updated = await storage.updateHelpRequestStatus(id, status);
-
-    if (!updated) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    // Send notification to requester
-    const message =
-      status === "accepted"
-        ? `${helper.name} accepted your help request.`
-        : `${helper.name} declined your help request.`;
-
-    await storage.createNotification({
-      employeeId: updated.requesterId,
-      message,
-    });
-
-    res.json(updated);
-  } catch (err) {
-    console.error("Help request update error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
   app.get("/api/notifications", async (req, res) => {
     const employeeId = req.headers['x-employee-id'];
     if (!employeeId) return res.json([]);
@@ -390,21 +424,43 @@ app.post("/api/stress", async (req, res) => {
   });
 
   // === MESSAGES ===
-  app.post(api.messages.create.path, async (req, res) => {
-      const input = api.messages.create.input.parse(req.body);
-      const message = await storage.createMessage(input);
+  app.post("/api/messages", async (req, res) => {
+    try {
+      const { helpRequestId, senderId, content } = req.body;
+
+      if (!helpRequestId || !senderId || !content) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const message = await storage.createMessage({ helpRequestId, senderId, content });
       res.status(201).json(message);
+    } catch (err) {
+      console.error("Send message error:", err);
+      res.status(500).json({ message: "Error sending message" });
+    }
   });
 
-  app.get(api.messages.list.path, async (req, res) => {
-      const msgs = await storage.getMessages();
+  app.get("/api/messages/:helpRequestId", async (req, res) => {
+    try {
+      const helpRequestId = Number(req.params.helpRequestId);
+
+      if (!helpRequestId) {
+        return res.status(400).json({ message: "Invalid helpRequestId" });
+      }
+
+      const msgs = await storage.getMessagesByHelpRequest(helpRequestId);
       res.json(msgs);
+    } catch (err) {
+      console.error("Fetch messages error:", err);
+      res.status(500).json({ message: "Error fetching messages" });
+    }
   });
 
   await seedDatabase();
 
   return httpServer;
 }
+
 async function seedDatabase() {
   const employeesList = await storage.getEmployees();
 
@@ -418,44 +474,14 @@ async function seedDatabase() {
       password: 'admin123'
     });
 
-    const emp1 = await storage.createEmployee({
-      name: 'Alice Johnson',
-      role: 'employee'
-    });
+    const emp1 = await storage.createEmployee({ name: 'Alice Johnson', role: 'employee' });
+    const emp2 = await storage.createEmployee({ name: 'Bob Smith', role: 'employee' });
+    const emp3 = await storage.createEmployee({ name: 'Charlie Brown', role: 'employee' });
 
-    const emp2 = await storage.createEmployee({
-      name: 'Bob Smith',
-      role: 'employee'
-    });
-
-    const emp3 = await storage.createEmployee({
-      name: 'Charlie Brown',
-      role: 'employee'
-    });
-
-    await storage.createTask({
-      title: 'Complete Q1 Report',
-      assignedToId: emp1.id,
-      priority: 'High'
-    });
-
-    await storage.createTask({
-      title: 'Update Website Assets',
-      assignedToId: emp2.id,
-      priority: 'Medium'
-    });
-
-    await storage.createTask({
-      title: 'Client Meeting Prep',
-      assignedToId: emp2.id,
-      priority: 'High'
-    });
-
-    await storage.createTask({
-      title: 'Fix Login Bug',
-      assignedToId: emp3.id,
-      priority: 'Low'
-    });
+    await storage.createTask({ title: 'Complete Q1 Report', assignedToId: emp1.id, priority: 'High' });
+    await storage.createTask({ title: 'Update Website Assets', assignedToId: emp2.id, priority: 'Medium' });
+    await storage.createTask({ title: 'Client Meeting Prep', assignedToId: emp2.id, priority: 'High' });
+    await storage.createTask({ title: 'Fix Login Bug', assignedToId: emp3.id, priority: 'Low' });
 
     console.log("Seeding complete.");
   }
