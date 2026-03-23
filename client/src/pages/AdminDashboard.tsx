@@ -115,6 +115,30 @@ export default function AdminDashboard() {
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskAssignee) return;
+
+    // ✅ Check if selected employee has updated stress today
+    const selectedEmp = employees?.find((emp: any) => emp.id === parseInt(taskAssignee));
+
+    if (!selectedEmp?.updatedToday) {
+      // Block assignment — send notification to employee and alert admin
+      fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: parseInt(taskAssignee),
+          message: `⚠️ Admin tried to assign you a task ("${taskTitle}") but your daily stress check-in is pending. Please update your stress level today.`
+        })
+      });
+
+      toast({
+        title: "⚠️ Assignment Blocked",
+        description: `${selectedEmp?.name} has not updated their stress today. A reminder has been sent to them.`,
+        variant: "destructive"
+      });
+      return; // Stop — do not assign task
+    }
+
+    // Employee has updated stress — proceed with assignment
     createTask({
       title: taskTitle,
       priority: taskPriority,
@@ -124,7 +148,7 @@ export default function AdminDashboard() {
         setIsTaskOpen(false);
         setTaskTitle("");
         setTaskAssignee("");
-        toast({ title: "Task Assigned", description: "Task successfully assigned." });
+        toast({ title: "✅ Task Assigned", description: `Task successfully assigned to ${selectedEmp?.name}.` });
       }
     });
   };
@@ -246,7 +270,15 @@ export default function AdminDashboard() {
                     <SelectTrigger className="rounded-xl border-gray-100"><SelectValue placeholder="Select employee" /></SelectTrigger>
                     <SelectContent className="z-[9999] bg-white border border-gray-200 shadow-2xl">
                       {employees?.filter((emp: any) => emp.role !== 'admin').map((emp: any) => (
-                        <SelectItem key={emp.id} value={emp.id.toString()}>{emp.name}</SelectItem>
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <span>{emp.name}</span>
+                            {emp.updatedToday
+                              ? <span className="text-[10px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">✓ Updated</span>
+                              : <span className="text-[10px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">⚠ Pending</span>
+                            }
+                          </div>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

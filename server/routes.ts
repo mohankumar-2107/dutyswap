@@ -407,6 +407,21 @@ export async function registerRoutes(
     res.json(list);
   });
 
+  // ✅ Allow admin to push a notification directly to an employee
+  app.post("/api/notifications", async (req, res) => {
+    try {
+      const { employeeId, message } = req.body;
+      if (!employeeId || !message) {
+        return res.status(400).json({ message: "employeeId and message are required" });
+      }
+      const notif = await storage.createNotification({ employeeId, message });
+      res.status(201).json(notif);
+    } catch (err) {
+      console.error("Notification error:", err);
+      res.status(500).json({ message: "Failed to send notification" });
+    }
+  });
+
   app.get(api.stress.history.path, async (req, res) => {
       const history = await storage.getStressLogs(Number(req.params.employeeId));
       res.json(history);
